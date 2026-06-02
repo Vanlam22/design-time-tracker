@@ -785,20 +785,29 @@ function DayCalendar({ date, dayEntries, day, S, lang, onAddAt, onEdit }) {
 
   const onDown = (e) => {
     if (e.target.closest('.cal-event')) return;
-    const clientY = e.clientY != null ? e.clientY : (e.touches && e.touches[0].clientY);
-    const startY = clientY;
-    const startTime = window.TT.clampMin(window.TT.snap15(lo + (clientY - wrapRef.current.querySelector('.cal-inner').getBoundingClientRect().top) / pxPerMin));
-    press.current = { startY, startTime, fired: false, timer: setTimeout(() => {
+    const clientY = e.clientY;
+    const startTime = timeFromY(clientY);
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+    press.current = { startY: clientY, startTime, fired: false, pointerId: e.pointerId, timer: setTimeout(() => {
+      if (!press.current) return;
       press.current.fired = true;
-      const end = Math.min(hi, startTime + 60);
-      setGhost({ start: startTime, end });
+      setGhost({ start: press.current.startTime, end: Math.min(hi, press.current.startTime + 60) });
       if (navigator.vibrate) navigator.vibrate(12);
     }, 380) };
   };
   const onMove = (e) => {
     if (!press.current) return;
-    const clientY = e.clientY != null ? e.clientY : (e.touches && e.touches[0].clientY);
-    if (Math.abs(clientY - press.current.startY) > 8 && !press.current.fired) { clearTimeout(press.current.timer); press.current = null; }
+    const clientY = e.clientY;
+    if (!press.current.fired) {
+      // before engaging: a real drag means the user is scrolling — cancel the long-press
+      if (Math.abs(clientY - press.current.startY) > 10) { clearTimeout(press.current.timer); press.current = null; }
+      return;
+    }
+    // engaged: drag to reposition the start, and stop the calendar from scrolling
+    e.preventDefault();
+    const t = timeFromY(clientY);
+    press.current.startTime = t;
+    setGhost({ start: t, end: Math.min(hi, t + 60) });
   };
   const onUp = () => {
     if (!press.current) return;
@@ -872,8 +881,8 @@ function Home({ entries, activities, date, setDate, day, actions, S, lang }) {
   const openNew = (startMin) => {
     let s = startMin;
     if (s == null) {
-      if (dayEntries.length) s = dayEntries[dayEntries.length - 1].end;
-      else { const d = new Date(); s = d.getHours() * 60 + d.getMinutes(); } // default to now
+      if (dayEntries.length) s = Math.max(...dayEntries.map((e) => e.end)); // latest logged end time
+      else { const d = new Date(); s = d.getHours() * 60 + d.getMinutes(); } // else nearest to now
     }
     s = window.TT.clampMin(window.TT.snap15(s));
     const e = window.TT.clampMin(s + 60);

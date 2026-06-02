@@ -1,6 +1,6 @@
 /* Time Tracker service worker — offline-capable PWA.
    Bump CACHE when you change the shell or the pinned CDN deps. */
-const CACHE = 'tt-v3';
+const CACHE = 'tt-v4';
 
 /* Same-origin app shell. */
 const SHELL = [
