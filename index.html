@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>Time Tracker</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#fbfaf8" />
+<meta name="application-name" content="Time Tracker" />
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png" />
+<!-- iOS home-screen / standalone -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Time Tracker" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --page: #f0eee9;
+    --bg:   #fbfaf8;
+    --card: #ffffff;
+    --line: #e9e6df;
+    --line-2: #f0ede7;
+    --ink:  #2b2924;
+    --ink-2:#6f6a61;
+    --ink-3:#a7a299;
+
+    --a:  oklch(0.64 0.115 150);
+    --b:  oklch(0.77 0.115 78);
+    --c:  oklch(0.605 0.145 27);
+    --s:  oklch(0.60 0.075 265);
+    --blank: #d8d4cc;
+
+    --a-t: oklch(0.95 0.035 150);
+    --b-t: oklch(0.955 0.04 85);
+    --c-t: oklch(0.955 0.04 30);
+    --s-t: oklch(0.955 0.022 265);
+
+    --now: oklch(0.62 0.2 25);
+
+    --shadow-sm: 0 1px 2px rgba(40,36,28,0.05);
+    --shadow:    0 10px 34px -10px rgba(40,36,28,0.22);
+    --r:   16px;
+    --r-sm: 11px;
+    --maxw: 402px;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Hanken Grotesk', system-ui, sans-serif;
+    background: var(--page);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01";
+  }
+  body.lang-zh, body.lang-zh button, body.lang-zh input {
+    font-family: 'Noto Sans TC', 'Hanken Grotesk', system-ui, sans-serif;
+  }
+  .tnum { font-variant-numeric: tabular-nums; }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  input { font-family: inherit; }
+
+  #root { min-height: 100dvh; display: flex; justify-content: center; }
+  .app {
+    width: 100%;
+    max-width: var(--maxw);
+    height: 100dvh;
+    background: var(--bg);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  @media (min-width: 460px) {
+    #root { align-items: center; padding: 24px 0; }
+    .app {
+      height: min(874px, calc(100dvh - 48px));
+      border-radius: 42px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--line);
+    }
+  }
+
+  .scroll { flex: 1; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
+  .scroll::-webkit-scrollbar { width: 0; }
+  .page-pad { padding: 0 18px 24px; }
+
+  .topbar {
+    padding: max(12px, env(safe-area-inset-top)) 18px 10px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--bg); flex-shrink: 0;
+  }
+
+  .tabbar {
+    position: relative; flex-shrink: 0;
+    display: flex;
+    padding: 7px 16px calc(8px + env(safe-area-inset-bottom));
+    background: var(--bg);
+    border-top: 1px solid var(--line);
+  }
+  .tab {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 5px 0; color: var(--ink-3); font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+    transition: color .18s;
+  }
+  .tab.active { color: var(--ink); }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-sm); }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    border-radius: 999px; font-weight: 600; font-size: 15px; white-space: nowrap;
+    transition: transform .12s ease, background .15s, opacity .15s; }
+  .btn:active { transform: scale(0.975); }
+  .btn-primary { background: var(--ink); color: var(--bg); padding: 14px 20px; }
+  .btn-ghost   { background: var(--line-2); color: var(--ink); padding: 12px 18px; }
+  .btn-block { width: 100%; }
+
+  .sheet-scrim { position: absolute; inset: 0; background: rgba(36,32,26,0.34);
+    opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 40; }
+  .sheet-scrim.open { opacity: 1; pointer-events: auto; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 50;
+    background: var(--bg); border-radius: 26px 26px 0 0;
+    box-shadow: 0 -10px 40px -12px rgba(40,36,28,0.3);
+    transform: translateY(102%); transition: transform .3s cubic-bezier(.32,.72,0,1);
+    max-height: 94%; display: flex; flex-direction: column; }
+  .sheet.open { transform: translateY(0); }
+  .sheet-grip { width: 40px; height: 5px; border-radius: 999px; background: var(--line); margin: 10px auto 2px; }
+  .sheet-body { overflow-y: auto; padding: 6px 22px calc(20px + env(safe-area-inset-bottom)); }
+  .sheet-body::-webkit-scrollbar { width: 0; }
+
+  .field-label { font-size: 12px; font-weight: 600; color: var(--ink-2); letter-spacing: 0.03em; text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; }
+  body.lang-zh .field-label { letter-spacing: 0.02em; text-transform: none; }
+  .text-input { width: 100%; padding: 13px 15px; border-radius: var(--r-sm);
+    border: 1px solid var(--line); background: var(--card); font-size: 16px; color: var(--ink);
+    outline: none; transition: border-color .15s; }
+  .text-input:focus { border-color: var(--ink-3); }
+  .text-input::placeholder { color: var(--ink-3); }
+  .vision-ta { resize: none; line-height: 1.5; min-height: 78px; }
+
+  .fade-in { animation: fade .3s ease both; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  .time-range { -webkit-appearance: none; appearance: none;
+    width: 100%; height: 8px; border-radius: 999px; outline: none; margin: 0;
+    background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--fill), var(--line) var(--fill), var(--line) 100%);
+    cursor: pointer; touch-action: none; }
+  .time-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
+    width: 26px; height: 26px; border-radius: 999px; background: var(--card); border: 3px solid var(--accent);
+    box-shadow: 0 2px 6px rgba(40,36,28,0.22); cursor: grab; transition: transform .1s; }
+  .time-range::-webkit-slider-thumb:active { transform: scale(1.12); cursor: grabbing; }
+  .time-range::-moz-range-thumb { width: 26px; height: 26px; border-radius: 999px; background: var(--card);
+    border: 3px solid var(--accent); box-shadow: 0 2px 6px rgba(40,36,28,0.22); cursor: grab; }
+  .time-range::-moz-range-track { height: 8px; border-radius: 999px; background: transparent; }
+
+  /* Calendar */
+  .cal-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; position: relative; -webkit-overflow-scrolling: touch; }
+  .cal-scroll::-webkit-scrollbar { width: 0; }
+  .cal-event { position: absolute; border-radius: 9px; overflow: hidden; text-align: left;
+    display: flex; padding: 0; box-shadow: var(--shadow-sm); transition: transform .1s; }
+  .cal-event:active { transform: scale(0.985); }
+  .press-ghost { position: absolute; left: 52px; right: 8px; border-radius: 9px;
+    border: 2px dashed var(--ink-3); background: rgba(120,114,104,0.08); pointer-events: none;
+    display: flex; align-items: center; justify-content: center; color: var(--ink-2); font-weight: 600; font-size: 13px; z-index: 5; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" data-presets="react">
+/* ============================ store + i18n ============================ */
+(function () {
+  const ACT_COLORS = [
+    'oklch(0.62 0.09 150)', 'oklch(0.62 0.09 250)', 'oklch(0.64 0.09 40)',
+    'oklch(0.62 0.09 310)', 'oklch(0.63 0.09 200)', 'oklch(0.64 0.09 95)',
+    'oklch(0.62 0.09 350)', 'oklch(0.62 0.09 120)',
+  ];
+  const CAT_ORDER = ['A', 'B', 'C'];
+  const SLEEP = { key: 'S', color: 'var(--s)', tint: 'var(--s-t)' };
+  const BLANK = { key: 'X', color: 'var(--blank)' };
+
+  const DEFAULT_ACTIVITIES = [
+    ['act_work'], ['act_family'], ['act_health'], ['act_spiritual'],
+    ['act_learning'], ['act_social'], ['act_chores'],
+  ].map((k, i) => ({ id: 'a' + (i + 1), nameKey: k[0], color: ACT_COLORS[i % ACT_COLORS.length] }));
+
+  const DEFAULT_SETTINGS = { wake: 7 * 60, bed: 23 * 60, lang: 'en' };
+
+  /* ---------- translations ---------- */
+  const STR = {
+    en: {
+      tab_today: 'Today', tab_analysis: 'Analysis', tab_settings: 'Settings', tab_vision: 'Vision',
+      today: 'Today', yesterday: 'Yesterday', tomorrow: 'Tomorrow',
+      cat_A: 'Productive', cat_B: 'Indirectly Productive', cat_C: 'Waste of Time',
+      tile_A: 'Productive', tile_B: 'Indirect', tile_C: 'Waste', tile_X: 'Unlogged',
+      now: 'Now', dayLength: 'Day length',
+      newEntry: 'New entry', editEntry: 'Edit entry',
+      whatDoing: 'What were you doing?', namePlaceholder: 'e.g. Deep work on report',
+      start: 'Start', end: 'End', snapNote: 'snaps to 15 min', endAfter: 'End must be after start',
+      category: 'Category', activity: 'Activity',
+      addEntry: 'Add entry', saveChanges: 'Save changes', save: 'Save', del: 'Delete',
+      addActsFirst: 'Add activities in Settings first.',
+      longPress: 'Long-press a free slot to add', untitled: 'Untitled',
+      sleepBounds: 'Start & end of day',
+      sleepDesc: 'Set when your day starts and ends — the window you want to track.',
+      wakeUp: 'Start of day', bedtime: 'End of day',
+      seg_day: 'Day', seg_week: 'Week', seg_month: 'Month',
+      noEntries: 'No entries logged', noEntriesSub: 'Log time on the Today tab to see your breakdown here.',
+      ofWaking: 'of day', pctWaking: '% of day', abPlus: 'A+B',
+      whereHours: 'Where the hours went', abcByDay: 'A / B / C balance by day', eachBar: 'Each bar is one day',
+      actBreakdown: 'Activity breakdown', loggedAcross: 'Logged time across A · B · C', noActsLogged: 'No activities logged.',
+      prodAB: 'Productive (A+B)', wasteC: 'Wasted (C)', unlogged: 'Unlogged',
+      activities: 'Activities', tagEvery: 'Tag every entry with one. Add, rename or remove anytime.',
+      addActivity: 'Add activity', newActivity: 'New activity', renameActivity: 'Rename activity',
+      activityName: 'Activity name', actPlaceholder: 'e.g. Work, Family, Exercise',
+      defaultDay: 'Default day', wakeBed: 'Start & end of day',
+      defaultDayDesc: 'Default day window for new days. You can still adjust any individual day.',
+      language: 'Language', data: 'Data', stored: 'stored on this device',
+      resetAll: 'Reset all data', resetConfirm: 'Erase all entries, activities and settings? This cannot be undone.',
+      savedLocally: 'Time Tracker · saved locally in your browser',
+      entry: 'entry', entries: 'entries',
+      vision_sub: 'Your compass for life',
+      v_vision: 'Vision', v_mission: 'Mission', v_values: 'Core Values', v_strategies: 'Strategies', v_goals: 'Goals',
+      vp_vision: 'Where do you want to be? Paint the picture of your ideal future.',
+      vp_mission: 'Why are you here? Your purpose in one clear sentence.',
+      vp_values: 'What principles guide your decisions and behavior?',
+      vp_strategies: 'How will you get there? Your key approaches.',
+      vp_goals: 'What will you achieve, and by when?',
+      v_edit: 'Edit', v_save: 'Save', v_empty: 'Tap Edit to write this.',
+    },
+    zh: {
+      tab_today: '今天', tab_analysis: '分析', tab_settings: '設定', tab_vision: '願景',
+      today: '今天', yesterday: '昨天', tomorrow: '明天',
+      cat_A: '有生產力', cat_B: '間接生產', cat_C: '浪費時間',
+      tile_A: '生產', tile_B: '間接', tile_C: '浪費', tile_X: '未記錄',
+      now: '現在', dayLength: '一天長度',
+      newEntry: '新增項目', editEntry: '編輯項目',
+      whatDoing: '你在做什麼？', namePlaceholder: '例如：專注工作',
+      start: '開始', end: '結束', snapNote: '以 15 分鐘為單位', endAfter: '結束需晚於開始',
+      category: '分類', activity: '活動',
+      addEntry: '新增項目', saveChanges: '儲存變更', save: '儲存', del: '刪除',
+      addActsFirst: '請先在設定新增活動。',
+      longPress: '長按空檔即可新增', untitled: '未命名',
+      sleepBounds: '一天的開始與結束',
+      sleepDesc: '設定一天的開始與結束時間，也就是你要追蹤的範圍。',
+      wakeUp: '一天開始', bedtime: '一天結束',
+      seg_day: '日', seg_week: '週', seg_month: '月',
+      noEntries: '尚未記錄', noEntriesSub: '在「今天」分頁記錄時間後，這裡會顯示分析。',
+      ofWaking: '佔全天', pctWaking: '佔全天百分比', abPlus: 'A+B',
+      whereHours: '時間都去了哪裡', abcByDay: '每日 A / B / C 比例', eachBar: '每根長條代表一天',
+      actBreakdown: '活動分布', loggedAcross: 'A · B · C 的記錄時間', noActsLogged: '尚無活動記錄。',
+      prodAB: '有生產 (A+B)', wasteC: '浪費 (C)', unlogged: '未記錄',
+      activities: '活動', tagEvery: '每筆記錄選擇一個活動，可隨時新增、改名或刪除。',
+      addActivity: '新增活動', newActivity: '新增活動', renameActivity: '重新命名活動',
+      activityName: '活動名稱', actPlaceholder: '例如：工作、家庭、運動',
+      defaultDay: '預設一天', wakeBed: '一天起訖時間',
+      defaultDayDesc: '新一天的預設起訖時間，仍可調整個別日期。',
+      language: '語言', data: '資料', stored: '筆記錄儲存在此裝置',
+      resetAll: '重設所有資料', resetConfirm: '確定清除所有記錄、活動與設定嗎？此動作無法復原。',
+      savedLocally: '時間追蹤 · 資料儲存在您的瀏覽器',
+      entry: '項', entries: '項',
+      vision_sub: '你人生的指南針',
+      v_vision: '願景', v_mission: '使命', v_values: '核心價值', v_strategies: '策略', v_goals: '目標',
+      vp_vision: '你想成為什麼樣子？描繪你理想未來的畫面。',
+      vp_mission: '你為何而來？用一句話寫下你的使命。',
+      vp_values: '哪些原則引導著你的決定與行為？',
+      vp_strategies: '你將如何達成？你的關鍵方法。',
+      vp_goals: '你要達成什麼，何時完成？',
+      v_edit: '編輯', v_save: '儲存', v_empty: '點「編輯」開始撰寫。',
+      // default activity names
+      act_work: '工作', act_family: '家庭', act_health: '健康', act_spiritual: '靈修',
+      act_learning: '學習', act_social: '社交', act_chores: '家務',
+    },
+  };
+  // english default activity names
+  Object.assign(STR.en, {
+    act_work: 'Work', act_family: 'Family', act_health: 'Health', act_spiritual: 'Spiritual',
+    act_learning: 'Learning', act_social: 'Social', act_chores: 'Chores',
+  });
+
+  function strings(lang) { return STR[lang] || STR.en; }
+  function actName(a, S) { return (a.nameKey && S[a.nameKey]) ? S[a.nameKey] : (a.name || ''); }
+  function catLabel(k, S) { return S['cat_' + k]; }
+
+  /* ---------- time utils ---------- */
+  const pad2 = (n) => (n < 10 ? '0' + n : '' + n);
+  function minTo12(min, lang) {
+    min = ((Math.round(min) % 1440) + 1440) % 1440;
+    let h = Math.floor(min / 60); const m = min % 60;
+    if (lang === 'zh') {
+      const ap = h < 12 ? '上午' : '下午'; let hh = h % 12; if (hh === 0) hh = 12;
+      return ap + hh + ':' + pad2(m);
+    }
+    const ap = h < 12 ? 'AM' : 'PM'; h = h % 12; if (h === 0) h = 12;
+    return h + ':' + pad2(m) + ' ' + ap;
+  }
+  function hourLabel(h, lang) {
+    if (lang === 'zh') { const ap = h < 12 ? '上午' : '下午'; let hh = h % 12; if (hh === 0) hh = 12; return ap + hh; }
+    let hh = h % 12; if (hh === 0) hh = 12; return hh + (h < 12 ? ' AM' : ' PM');
+  }
+  function fmtDur(min, lang) {
+    min = Math.max(0, Math.round(min)); const h = Math.floor(min / 60), m = min % 60;
+    if (lang === 'zh') { if (h && m) return h + '小時' + m + '分'; if (h) return h + '小時'; return m + '分'; }
+    if (h && m) return h + 'h ' + m + 'm'; if (h) return h + 'h'; return m + 'm';
+  }
+  function timeRange(s, e, lang) {
+    if (lang === 'zh') return minTo12(s, 'zh') + ' – ' + minTo12(e, 'zh');
+    const sp = minTo12(s), ep = minTo12(e);
+    if (sp.slice(-2) === ep.slice(-2)) return sp.slice(0, -3) + ' \u2013 ' + ep;
+    return sp + ' \u2013 ' + ep;
+  }
+  const snap15 = (min) => Math.round(min / 15) * 15;
+  const clampMin = (min) => Math.max(0, Math.min(1440, min));
+
+  /* ---------- date utils ---------- */
+  function toDateStr(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  function parseDate(s) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
+  function todayStr() { return toDateStr(new Date()); }
+  function addDays(s, n) { const d = parseDate(s); d.setDate(d.getDate() + n); return toDateStr(d); }
+  function isToday(s) { return s === todayStr(); }
+
+  const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const WD_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const WD_ZH = ['日', '一', '二', '三', '四', '五', '六'];
+
+  function wdShort(dayIdx, lang) { return lang === 'zh' ? WD_ZH[dayIdx] : WD[dayIdx]; }
+
+  function dateTitle(s, lang) {
+    if (isToday(s)) return strings(lang).today;
+    if (s === addDays(todayStr(), -1)) return strings(lang).yesterday;
+    if (s === addDays(todayStr(), 1)) return strings(lang).tomorrow;
+    const d = parseDate(s);
+    if (lang === 'zh') return (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    return WD[d.getDay()] + ', ' + MO[d.getMonth()] + ' ' + d.getDate();
+  }
+  function dateSub(s, lang) {
+    const d = parseDate(s);
+    if (lang === 'zh') return '星期' + WD_ZH[d.getDay()] + ' · ' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    return WD_FULL[d.getDay()] + ' · ' + MO[d.getMonth()] + ' ' + d.getDate();
+  }
+  function weekLabel(start, lang) {
+    const sd = parseDate(start), ed = parseDate(addDays(start, 6));
+    if (lang === 'zh') return (sd.getMonth() + 1) + '月' + sd.getDate() + '日 – ' + (ed.getMonth() + 1) + '月' + ed.getDate() + '日';
+    return MO[sd.getMonth()] + ' ' + sd.getDate() + ' – ' + MO[ed.getMonth()] + ' ' + ed.getDate();
+  }
+  function monthLabel(s, lang) {
+    const d = parseDate(s);
+    if (lang === 'zh') return d.getFullYear() + '年 ' + (d.getMonth() + 1) + '月';
+    const MOF = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    return MOF[d.getMonth()] + ' ' + d.getFullYear();
+  }
+
+  function weekStart(s) { const d = parseDate(s); const day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day); return toDateStr(d); }
+  function monthStart(s) { const d = parseDate(s); return toDateStr(new Date(d.getFullYear(), d.getMonth(), 1)); }
+  function daysInMonth(s) { const d = parseDate(s); return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); }
+
+  /* ---------- persistence ---------- */
+  const KEYS = { entries: 'tt_entries_v1', activities: 'tt_activities_v2', days: 'tt_days_v1', settings: 'tt_settings_v2', vision: 'tt_vision_v1' };
+  function load(key, fallback) { try { const raw = localStorage.getItem(KEYS[key]); return raw ? JSON.parse(raw) : fallback; } catch (e) { return fallback; } }
+  function save(key, val) { try { localStorage.setItem(KEYS[key], JSON.stringify(val)); } catch (e) {} }
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+  /* ---------- aggregation ---------- */
+  function entriesForDate(entries, date) { return entries.filter((e) => e.date === date).slice().sort((a, b) => a.start - b.start); }
+  function computeDay(dayEntries, wake, bed) {
+    const cat = { A: 0, B: 0, C: 0 }; const byActivity = {}; let logged = 0;
+    dayEntries.forEach((e) => {
+      const dur = Math.max(0, e.end - e.start);
+      if (cat[e.cat] != null) { cat[e.cat] += dur; logged += dur; }
+      if (e.activityId) byActivity[e.activityId] = (byActivity[e.activityId] || 0) + dur;
+    });
+    const dayLen = Math.max(0, bed - wake);
+    let blank = dayLen - logged; if (blank < 0) blank = 0;
+    return { A: cat.A, B: cat.B, C: cat.C, blank, logged, dayLen, total: dayLen, byActivity };
+  }
+  function computeRange(entries, getDay, startDate, nDays) {
+    const sum = { A: 0, B: 0, C: 0, blank: 0, logged: 0, total: 0, byActivity: {} };
+    const perDay = [];
+    for (let i = 0; i < nDays; i++) {
+      const ds = addDays(startDate, i); const dy = getDay(ds);
+      const st = computeDay(entriesForDate(entries, ds), dy.wake, dy.bed);
+      perDay.push({ date: ds, ...st });
+      sum.A += st.A; sum.B += st.B; sum.C += st.C;
+      sum.blank += st.blank; sum.logged += st.logged; sum.total += st.total;
+      for (const k in st.byActivity) sum.byActivity[k] = (sum.byActivity[k] || 0) + st.byActivity[k];
+    }
+    return { sum, perDay };
+  }
+
+  // layout overlapping events into columns (per cluster)
+  function layoutDay(es) {
+    const sorted = es.slice().sort((a, b) => a.start - b.start || a.end - b.end);
+    const out = []; let i = 0;
+    while (i < sorted.length) {
+      let j = i + 1, maxEnd = sorted[i].end; const cluster = [sorted[i]];
+      while (j < sorted.length && sorted[j].start < maxEnd) { cluster.push(sorted[j]); maxEnd = Math.max(maxEnd, sorted[j].end); j++; }
+      const colEnds = [];
+      cluster.forEach((e) => { let c = 0; while (c < colEnds.length && colEnds[c] > e.start) c++; colEnds[c] = e.end; e.__col = c; });
+      const ncol = colEnds.length;
+      cluster.forEach((e) => out.push({ e, col: e.__col, cols: ncol }));
+      i = j;
+    }
+    return out;
+  }
+
+  window.TT = {
+    CAT_ORDER, SLEEP, BLANK, ACT_COLORS, DEFAULT_ACTIVITIES, DEFAULT_SETTINGS,
+    strings, actName, catLabel,
+    pad2, minTo12, hourLabel, fmtDur, timeRange, snap15, clampMin,
+    toDateStr, parseDate, todayStr, addDays, isToday, dateTitle, dateSub, weekLabel, monthLabel,
+    weekStart, monthStart, daysInMonth, wdShort,
+    KEYS, load, save, uid,
+    entriesForDate, computeDay, computeRange, layoutDay,
+  };
+})();
+</script>
+
+<script type="text/babel" data-presets="react">
+/* ============================ shared UI ============================ */
+const { useState, useEffect, useRef, useCallback } = React;
+
+function Icon({ name, size = 22, stroke = 1.8 }) {
+  const p = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
+    strokeWidth: stroke, strokeLinecap: 'round', strokeLinejoin: 'round' };
+  switch (name) {
+    case 'cal': return (<svg {...p}><rect x="3.5" y="4.5" width="17" height="16" rx="2.5" /><path d="M3.5 9h17M8 3v3M16 3v3" /></svg>);
+    case 'chart': return (<svg {...p}><path d="M5 20V11M12 20V5M19 20v-6" /></svg>);
+    case 'sliders': return (<svg {...p}><path d="M5 7h9M5 17h4M16 7h3M11 17h8" /><circle cx="16" cy="7" r="2.1" fill="var(--bg)" /><circle cx="9" cy="17" r="2.1" fill="var(--bg)" /></svg>);
+    case 'plus': return (<svg {...p}><path d="M12 5v14M5 12h14" /></svg>);
+    case 'chevL': return (<svg {...p}><path d="M15 6l-6 6 6 6" /></svg>);
+    case 'chevR': return (<svg {...p}><path d="M9 6l6 6-6 6" /></svg>);
+    case 'x': return (<svg {...p}><path d="M6 6l12 12M18 6L6 18" /></svg>);
+    case 'trash': return (<svg {...p}><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" /></svg>);
+    case 'moon': return (<svg {...p}><path d="M20 13.5A8 8 0 1 1 10.5 4 6.3 6.3 0 0 0 20 13.5z" /></svg>);
+    case 'pencil': return (<svg {...p}><path d="M14.5 5.5l4 4M4 20l1-4L16 5a2.1 2.1 0 0 1 3 3L8 19l-4 1z" /></svg>);
+    case 'sun': return (<svg {...p}><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4" /></svg>);
+    case 'globe': return (<svg {...p}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18" /></svg>);
+    case 'compass': return (<svg {...p}><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2 5-5 2 2-5 5-2z" /></svg>);
+    case 'eye': return (<svg {...p}><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" /><circle cx="12" cy="12" r="2.5" /></svg>);
+    case 'flag': return (<svg {...p}><path d="M5 21V4M5 4h11l-1.5 4L16 12H5" /></svg>);
+    case 'heart': return (<svg {...p}><path d="M12 20s-7-4.5-7-9.5A3.8 3.8 0 0 1 12 7a3.8 3.8 0 0 1 7 3.5C19 15.5 12 20 12 20z" /></svg>);
+    case 'route': return (<svg {...p}><circle cx="6" cy="18" r="2.2" /><circle cx="18" cy="6" r="2.2" /><path d="M8 18h6a3 3 0 0 0 0-6H10a3 3 0 0 1 0-6h6" /></svg>);
+    case 'target': return (<svg {...p}><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r="0.8" fill="currentColor" /></svg>);
+    default: return null;
+  }
+}
+
+function Dot({ color, size = 9 }) {
+  return <span style={{ width: size, height: size, borderRadius: 999, background: color, display: 'inline-block', flexShrink: 0 }} />;
+}
+
+function Sheet({ open, onClose, title, children, footer }) {
+  const [render, setRender] = useState(open);
+  useEffect(() => { if (open) setRender(true); else { const t = setTimeout(() => setRender(false), 320); return () => clearTimeout(t); } }, [open]);
+  if (!render) return null;
+  return (
+    <React.Fragment>
+      <div className={'sheet-scrim' + (open ? ' open' : '')} onClick={onClose} />
+      <div className={'sheet' + (open ? ' open' : '')} role="dialog" aria-modal="true">
+        <div className="sheet-grip" />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 22px 8px' }}>
+          <div style={{ fontSize: 18, fontWeight: 700, whiteSpace: 'nowrap' }}>{title}</div>
+          <button onClick={onClose} aria-label="Close" style={{ display: 'grid', placeItems: 'center', width: 32, height: 32, borderRadius: 999, background: 'var(--line-2)', color: 'var(--ink-2)' }}><Icon name="x" size={18} /></button>
+        </div>
+        <div className="sheet-body">{children}</div>
+        {footer && <div style={{ padding: '12px 22px calc(18px + env(safe-area-inset-bottom))', borderTop: '1px solid var(--line)' }}>{footer}</div>}
+      </div>
+    </React.Fragment>
+  );
+}
+
+function TimeSlider({ value, onChange, accent }) {
+  const col = accent || 'var(--ink)';
+  return (
+    <div>
+      <div className="tnum" style={{ textAlign: 'center', fontSize: 24, fontWeight: 700, letterSpacing: '-0.01em', color: col, marginBottom: 8 }}>
+        {window.TT.minTo12(value, window.__lang)}
+      </div>
+      <input type="range" className="time-range" min={0} max={1440} step={15} value={value}
+        onChange={(e) => onChange(window.TT.clampMin(parseInt(e.target.value, 10)))}
+        style={{ '--fill': ((value / 1440) * 100) + '%', '--accent': col }} />
+    </div>
+  );
+}
+
+function SegControl({ options, value, onChange }) {
+  return (
+    <div style={{ display: 'flex', background: 'var(--line-2)', borderRadius: 12, padding: 4, gap: 2 }}>
+      {options.map((o) => {
+        const active = o.value === value;
+        return (
+          <button key={o.value} onClick={() => onChange(o.value)}
+            style={{ flex: 1, padding: '8px 0', borderRadius: 9, fontSize: 14, fontWeight: 600,
+              background: active ? 'var(--card)' : 'transparent', color: active ? 'var(--ink)' : 'var(--ink-2)',
+              boxShadow: active ? 'var(--shadow-sm)' : 'none', transition: 'all .18s' }}>
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function StackedBar({ segs, height = 14, total }) {
+  const sum = total != null ? total : segs.reduce((s, x) => s + x.value, 0);
+  return (
+    <div style={{ display: 'flex', gap: 2, height, width: '100%', borderRadius: 999, overflow: 'hidden', background: 'var(--line-2)' }}>
+      {segs.filter((s) => s.value > 0).map((s) => (
+        <div key={s.key} style={{ width: (sum ? (s.value / sum) * 100 : 0) + '%', background: s.color, transition: 'width .5s cubic-bezier(.4,0,.2,1)' }} />
+      ))}
+    </div>
+  );
+}
+
+Object.assign(window, { Icon, Dot, Sheet, TimeSlider, SegControl, StackedBar });
+</script>
+
+<script type="text/babel" data-presets="react">
+/* ============================ entry + day sheets ============================ */
+function CompactTime({ label, value, onChange, lang }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-2)' }}>{label}</span>
+        <span className="tnum" style={{ fontSize: 17, fontWeight: 700, color: 'var(--ink)', whiteSpace: 'nowrap' }}>{window.TT.minTo12(value, lang)}</span>
+      </div>
+      <input type="range" className="time-range" min={0} max={1440} step={15} value={value}
+        onChange={(e) => onChange(window.TT.clampMin(parseInt(e.target.value, 10)))}
+        style={{ '--fill': ((value / 1440) * 100) + '%', '--accent': 'var(--ink)' }} />
+    </div>
+  );
+}
+
+function EntrySheet({ open, draft, activities, pastNames, S, lang, onClose, onSave, onDelete }) {
+  const [name, setName] = useState('');
+  const [start, setStart] = useState(540);
+  const [end, setEnd] = useState(600);
+  const [cat, setCat] = useState('A');
+  const [actId, setActId] = useState(null);
+
+  useEffect(() => {
+    if (draft) {
+      setName(draft.name || '');
+      setStart(draft.start); setEnd(draft.end);
+      setCat(draft.cat || 'A');
+      setActId(draft.activityId || (activities[0] && activities[0].id) || null);
+    }
+  }, [draft]);
+
+  const isEdit = draft && draft.id;
+  const valid = actId && (end - start) > 0;
+  const catCol = { A: 'var(--a)', B: 'var(--b)', C: 'var(--c)' }[cat];
+  const catTint = { A: 'var(--a-t)', B: 'var(--b-t)', C: 'var(--c-t)' };
+
+  return (
+    <Sheet open={open} onClose={onClose} title={isEdit ? S.editEntry : S.newEntry}
+      footer={
+        <div style={{ display: 'flex', gap: 10 }}>
+          {isEdit && (
+            <button className="btn" onClick={() => onDelete(draft.id)} style={{ background: 'var(--c-t)', color: 'var(--c)', padding: 14, width: 52 }} aria-label={S.del}><Icon name="trash" size={20} /></button>
+          )}
+          <button className="btn btn-primary btn-block" disabled={!valid} style={{ flex: 1, opacity: valid ? 1 : 0.4 }}
+            onClick={() => valid && onSave({ id: draft.id, name: name.trim(), start, end, cat, activityId: actId })}>
+            {isEdit ? S.saveChanges : S.addEntry}
+          </button>
+        </div>
+      }>
+      <div style={{ marginBottom: 13 }}>
+        <div className="field-label">{S.whatDoing}</div>
+        <input className="text-input" value={name} list="tt-names" placeholder={S.namePlaceholder} onChange={(e) => setName(e.target.value)} />
+        <datalist id="tt-names">{pastNames.map((n) => <option key={n} value={n} />)}</datalist>
+      </div>
+
+      <div style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 13, padding: '12px 14px', marginBottom: 13 }}>
+        <CompactTime label={S.start} value={start} lang={lang} onChange={(v) => { setStart(v); setEnd(window.TT.clampMin(v + 60)); }} />
+        <div style={{ height: 1, background: 'var(--line-2)', margin: '10px 0' }} />
+        <CompactTime label={S.end} value={end} lang={lang} onChange={setEnd} />
+        <div style={{ textAlign: 'right', marginTop: 9, color: end - start > 0 ? 'var(--ink-3)' : 'var(--c)', fontSize: 12.5, fontWeight: 600 }}>
+          {end - start > 0 ? window.TT.fmtDur(end - start, lang) + ' · ' + S.snapNote : S.endAfter}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 13 }}>
+        <div className="field-label">{S.category}</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {window.TT.CAT_ORDER.map((k) => {
+            const col = { A: 'var(--a)', B: 'var(--b)', C: 'var(--c)' }[k]; const on = cat === k;
+            return (
+              <button key={k} onClick={() => setCat(k)} style={{ flex: 1, padding: '10px 6px', borderRadius: 13, textAlign: 'left',
+                border: '1.5px solid ' + (on ? col : 'var(--line)'), background: on ? catTint[k] : 'var(--card)', transition: 'all .15s' }}>
+                <span className="tnum" style={{ width: 22, height: 22, borderRadius: 7, display: 'grid', placeItems: 'center', background: col, color: '#fff', fontWeight: 700, fontSize: 13, marginBottom: 4 }}>{k}</span>
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: on ? col : 'var(--ink-2)', lineHeight: 1.15 }}>{window.TT.catLabel(k, S)}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <div className="field-label">{S.activity}</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {activities.map((a) => {
+            const on = actId === a.id;
+            return (
+              <button key={a.id} onClick={() => setActId(a.id)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 14px', borderRadius: 999,
+                border: '1.5px solid ' + (on ? 'var(--ink)' : 'var(--line)'), background: on ? 'var(--ink)' : 'var(--card)',
+                color: on ? 'var(--bg)' : 'var(--ink)', fontWeight: 600, fontSize: 14, transition: 'all .14s' }}>
+                <Dot color={a.color} size={8} />{window.TT.actName(a, S)}
+              </button>
+            );
+          })}
+          {activities.length === 0 && <div style={{ color: 'var(--ink-3)', fontSize: 14 }}>{S.addActsFirst}</div>}
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
+function SleepSheet({ open, wake, bed, S, lang, onClose, onSave }) {
+  const [w, setW] = useState(wake);
+  const [b, setB] = useState(bed);
+  useEffect(() => { if (open) { setW(wake); setB(bed); } }, [open]);
+  const dayLen = Math.max(0, b - w);
+  return (
+    <Sheet open={open} onClose={onClose} title={S.sleepBounds}
+      footer={<button className="btn btn-primary btn-block" onClick={() => onSave(w, b)}>{S.save}</button>}>
+      <p style={{ color: 'var(--ink-2)', fontSize: 14, lineHeight: 1.5, marginTop: 0, marginBottom: 16 }}>{S.sleepDesc}</p>
+      <div style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 13, padding: '12px 14px', marginBottom: 14 }}>
+        <CompactTime label={S.wakeUp} value={w} onChange={setW} lang={lang} />
+        <div style={{ height: 1, background: 'var(--line-2)', margin: '10px 0' }} />
+        <CompactTime label={S.bedtime} value={b} onChange={setB} lang={lang} />
+      </div>
+      <div className="card" style={{ padding: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink-2)' }}>{S.dayLength}</span>
+        <span className="tnum" style={{ fontWeight: 700, fontSize: 17 }}>{window.TT.fmtDur(dayLen, lang)}</span>
+      </div>
+    </Sheet>
+  );
+}
+
+Object.assign(window, { EntrySheet, SleepSheet });
+</script>
+
+<script type="text/babel" data-presets="react">
+/* ============================ Today — calendar view ============================ */
+const MIN_PPH = 46; // min pixels per hour
+
+function DayCalendar({ date, dayEntries, day, S, lang, onAddAt, onEdit }) {
+  const wrapRef = useRef(null);
+  const [vh, setVh] = useState(560);
+  const [nowMin, setNowMin] = useState(() => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); });
+  const [ghost, setGhost] = useState(null); // {start,end} during long-press
+  const press = useRef(null);
+
+  useEffect(() => {
+    const measure = () => { if (wrapRef.current) setVh(wrapRef.current.clientHeight); };
+    measure(); window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+  useEffect(() => {
+    const t = setInterval(() => { const d = new Date(); setNowMin(d.getHours() * 60 + d.getMinutes()); }, 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  // display range
+  let lo = day.wake, hi = day.bed;
+  dayEntries.forEach((e) => { lo = Math.min(lo, e.start); hi = Math.max(hi, e.end); });
+  lo = Math.max(0, Math.floor(lo / 60) * 60 - 0);
+  hi = Math.min(1440, Math.ceil(hi / 60) * 60);
+  if (hi - lo < 240) hi = Math.min(1440, lo + 240);
+  const rangeMin = hi - lo;
+  const pxPerMin = Math.max(MIN_PPH / 60, (vh - 8) / rangeMin);
+  const contentH = rangeMin * pxPerMin;
+  const yOf = (m) => (m - lo) * pxPerMin;
+  const hours = []; for (let h = Math.ceil(lo / 60); h <= Math.floor(hi / 60); h++) hours.push(h);
+
+  const laid = window.TT.layoutDay(dayEntries);
+  const showNow = window.TT.isToday(date) && nowMin >= lo && nowMin <= hi;
+
+  const timeFromY = (clientY) => {
+    const inner = wrapRef.current.querySelector('.cal-inner');
+    const rect = inner.getBoundingClientRect();
+    let m = lo + (clientY - rect.top) / pxPerMin;
+    return window.TT.clampMin(window.TT.snap15(m));
+  };
+
+  const onDown = (e) => {
+    if (e.target.closest('.cal-event')) return;
+    const clientY = e.clientY != null ? e.clientY : (e.touches && e.touches[0].clientY);
+    const startY = clientY;
+    const startTime = window.TT.clampMin(window.TT.snap15(lo + (clientY - wrapRef.current.querySelector('.cal-inner').getBoundingClientRect().top) / pxPerMin));
+    press.current = { startY, startTime, fired: false, timer: setTimeout(() => {
+      press.current.fired = true;
+      const end = Math.min(hi, startTime + 60);
+      setGhost({ start: startTime, end });
+      if (navigator.vibrate) navigator.vibrate(12);
+    }, 380) };
+  };
+  const onMove = (e) => {
+    if (!press.current) return;
+    const clientY = e.clientY != null ? e.clientY : (e.touches && e.touches[0].clientY);
+    if (Math.abs(clientY - press.current.startY) > 8 && !press.current.fired) { clearTimeout(press.current.timer); press.current = null; }
+  };
+  const onUp = () => {
+    if (!press.current) return;
+    clearTimeout(press.current.timer);
+    if (press.current.fired) { const st = press.current.startTime; setGhost(null); onAddAt(st); }
+    press.current = null;
+  };
+
+  return (
+    <div className="cal-scroll" ref={wrapRef} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} style={{ touchAction: 'pan-y' }}>
+      <div className="cal-inner" style={{ position: 'relative', height: contentH, minHeight: '100%' }}>
+        {/* hour grid */}
+        {hours.map((h) => (
+          <div key={h} style={{ position: 'absolute', top: yOf(h * 60), left: 0, right: 0, height: 0, borderTop: '1px solid var(--line)' }}>
+            <span className="tnum" style={{ position: 'absolute', top: -7, left: 5, fontSize: 10, color: 'var(--ink-3)', fontWeight: 600, background: 'var(--bg)', paddingRight: 3, whiteSpace: 'nowrap' }}>{window.TT.hourLabel(h, lang)}</span>
+          </div>
+        ))}
+        <div style={{ position: 'absolute', top: 0, bottom: 0, left: 46, width: 1, background: 'var(--line)' }} />
+
+        {/* ghost (long-press preview) */}
+        {ghost && (
+          <div className="press-ghost" style={{ top: yOf(ghost.start), height: Math.max(28, (ghost.end - ghost.start) * pxPerMin) }}>+ {window.TT.minTo12(ghost.start, lang)}</div>
+        )}
+
+        {/* events */}
+        {laid.map(({ e, col, cols }) => {
+          const top = yOf(e.start), h = Math.max(20, (e.end - e.start) * pxPerMin - 2);
+          const gutter = 52, gap = 4;
+          const avail = `calc(100% - ${gutter + 8}px)`;
+          const w = `calc((${avail} - ${(cols - 1) * gap}px) / ${cols})`;
+          const left = `calc(${gutter}px + (${w} + ${gap}px) * ${col})`;
+          const col0 = { A: 'var(--a)', B: 'var(--b)', C: 'var(--c)' }[e.cat];
+          const tint = { A: 'var(--a-t)', B: 'var(--b-t)', C: 'var(--c-t)' }[e.cat];
+          const short = h < 38;
+          return (
+            <button key={e.id} className="cal-event" onClick={() => onEdit(e)}
+              style={{ top, height: h, left, width: w, background: tint, border: '1px solid ' + col0 + '55' }}>
+              <span style={{ width: 4, background: col0, flexShrink: 0 }} />
+              <span style={{ padding: short ? '2px 6px' : '5px 8px', minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', justifyContent: short ? 'center' : 'flex-start' }}>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.2 }}>
+                  {e.name || S.untitled}
+                </span>
+                {!short && <span className="tnum" style={{ fontSize: 10.5, color: 'var(--ink-2)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{window.TT.timeRange(e.start, e.end, lang)}</span>}
+              </span>
+            </button>
+          );
+        })}
+
+        {/* now line */}
+        {showNow && (
+          <div style={{ position: 'absolute', top: yOf(nowMin), left: 46, right: 4, height: 0, zIndex: 8, pointerEvents: 'none' }}>
+            <div style={{ position: 'absolute', left: -5, top: -4, width: 9, height: 9, borderRadius: 999, background: 'var(--now)' }} />
+            <div style={{ borderTop: '2px solid var(--now)' }} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Home({ entries, activities, date, setDate, day, actions, S, lang }) {
+  const [sheet, setSheet] = useState(null);
+  const [sleepOpen, setSleepOpen] = useState(false);
+
+  const dayEntries = window.TT.entriesForDate(entries, date);
+  const st = window.TT.computeDay(dayEntries, day.wake, day.bed);
+  const waking = Math.max(0, st.dayLen);
+  const pct = (m) => waking > 0 ? Math.round((m / waking) * 100) : 0;
+  const pastNames = [...new Set(entries.map((e) => e.name).filter(Boolean))].slice(0, 40);
+
+  const openNew = (startMin) => {
+    let s = startMin;
+    if (s == null) s = dayEntries.length ? dayEntries[dayEntries.length - 1].end : day.wake;
+    s = window.TT.clampMin(window.TT.snap15(s));
+    const e = window.TT.clampMin(s + 60);
+    setSheet({ name: '', start: s, end: e > s ? e : s + 60, cat: 'A', activityId: activities[0] && activities[0].id });
+  };
+  const saveEntry = (data) => {
+    if (data.id) actions.updateEntry(data.id, data); else actions.addEntry(date, data);
+    setSheet(null);
+  };
+
+  return (
+    <React.Fragment>
+      <div className="topbar">
+        <button onClick={() => setDate(window.TT.addDays(date, -1))} aria-label="prev" style={navChip}><Icon name="chevL" size={20} /></button>
+        <button onClick={() => setDate(window.TT.todayStr())} style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 19, fontWeight: 700, letterSpacing: '-0.01em' }}>{window.TT.dateTitle(date, lang)}</div>
+          <div style={{ fontSize: 12, color: 'var(--ink-3)', fontWeight: 500, whiteSpace: 'nowrap' }}>{window.TT.dateSub(date, lang)}</div>
+        </button>
+        <button onClick={() => setDate(window.TT.addDays(date, 1))} aria-label="next" style={navChip}><Icon name="chevR" size={20} /></button>
+      </div>
+
+      {/* compact summary strip */}
+      <div style={{ padding: '0 18px 10px', flexShrink: 0 }}>
+        <button onClick={() => setSleepOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto 9px', padding: '5px 12px', borderRadius: 999, background: 'var(--line-2)', color: 'var(--ink-2)', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
+          <span className="tnum">{window.TT.minTo12(day.wake, lang)} – {window.TT.minTo12(day.bed, lang)}</span>
+          <Icon name="pencil" size={12} />
+        </button>
+        <StackedBar height={12} total={waking} segs={[
+          { key: 'A', value: st.A, color: 'var(--a)' }, { key: 'B', value: st.B, color: 'var(--b)' },
+          { key: 'C', value: st.C, color: 'var(--c)' }, { key: 'X', value: st.blank, color: 'var(--blank)' },
+        ]} />
+        <div style={{ display: 'flex', gap: 6, marginTop: 9 }}>
+          {[['A', 'var(--a)', st.A], ['B', 'var(--b)', st.B], ['C', 'var(--c)', st.C], ['X', 'var(--blank)', st.blank]].map(([k, c, v]) => (
+            <div key={k} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+              <span className="tnum" style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)' }}>{pct(v)}%</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Dot color={c} size={7} />
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--ink-2)' }}>{S['tile_' + k]}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <DayCalendar date={date} dayEntries={dayEntries} day={day} S={S} lang={lang}
+        onAddAt={openNew} onEdit={(e) => setSheet(e)} />
+
+      {/* FAB */}
+      <button onClick={() => openNew()} aria-label={S.addEntry} style={{ position: 'absolute', right: 18, bottom: 'calc(78px + env(safe-area-inset-bottom))', width: 54, height: 54, borderRadius: 999, background: 'var(--ink)', color: 'var(--bg)', display: 'grid', placeItems: 'center', boxShadow: '0 8px 22px -6px rgba(40,36,28,0.5)', zIndex: 20 }}>
+        <Icon name="plus" size={26} />
+      </button>
+
+      <EntrySheet open={!!sheet} draft={sheet} activities={activities} pastNames={pastNames} S={S} lang={lang}
+        onClose={() => setSheet(null)} onSave={saveEntry} onDelete={(id) => { actions.deleteEntry(id); setSheet(null); }} />
+      <SleepSheet open={sleepOpen} wake={day.wake} bed={day.bed} S={S} lang={lang}
+        onClose={() => setSleepOpen(false)} onSave={(w, b) => { actions.setDay(date, { wake: w, bed: b }); setSleepOpen(false); }} />
+    </React.Fragment>
+  );
+}
+const navChip = { width: 38, height: 38, borderRadius: 999, background: 'var(--line-2)', color: 'var(--ink-2)', display: 'grid', placeItems: 'center', flexShrink: 0 };
+
+Object.assign(window, { Home });
+</script>
+
+<script type="text/babel" data-presets="react">
+/* ============================ Analysis ============================ */
+function Donut({ segs, size = 132, sw = 16, centerTop, centerBig, centerSub }) {
+  const r = (size - sw) / 2, C = 2 * Math.PI * r;
+  const total = segs.reduce((s, x) => s + x.value, 0) || 1;
+  let off = 0;
+  return (
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--line-2)" strokeWidth={sw} />
+        {segs.filter((s) => s.value > 0).map((s, i) => {
+          const len = (s.value / total) * C;
+          const el = <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none" stroke={s.color} strokeWidth={sw} strokeDasharray={`${len} ${C - len}`} strokeDashoffset={-off} style={{ transition: 'stroke-dasharray .6s, stroke-dashoffset .6s' }} />;
+          off += len; return el;
+        })}
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        {centerTop && <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-3)' }}>{centerTop}</div>}
+        <div className="tnum" style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1 }}>{centerBig}</div>
+        {centerSub && <div style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--ink-3)', marginTop: 2 }}>{centerSub}</div>}
+      </div>
+    </div>
+  );
+}
+
+function LegRow({ color, label, mins, pct, lang }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 0' }}>
+      <Dot color={color} size={9} />
+      <span style={{ fontSize: 13.5, fontWeight: 600, flex: 1 }}>{label}</span>
+      <span className="tnum" style={{ fontSize: 12.5, color: 'var(--ink-2)', fontWeight: 600, whiteSpace: 'nowrap' }}>{window.TT.fmtDur(mins, lang)}</span>
+      <span className="tnum" style={{ fontSize: 12.5, color: 'var(--ink-3)', width: 34, textAlign: 'right' }}>{pct}%</span>
+    </div>
+  );
+}
+
+function DayStrip({ dayEntries, wake, bed, height = 20 }) {
+  const span = Math.max(1, bed - wake);
+  const sorted = dayEntries.slice().sort((a, b) => a.start - b.start);
+  const segs = []; let cur = wake;
+  sorted.forEach((e) => {
+    const cs = Math.max(e.start, wake), ce = Math.min(e.end, bed); if (ce <= cs) return;
+    if (cs > cur) segs.push({ a: cur, b: cs, color: 'var(--blank)' });
+    segs.push({ a: cs, b: ce, color: { A: 'var(--a)', B: 'var(--b)', C: 'var(--c)' }[e.cat] }); cur = Math.max(cur, ce);
+  });
+  if (cur < bed) segs.push({ a: cur, b: bed, color: 'var(--blank)' });
+  return (
+    <div style={{ height, borderRadius: 6, overflow: 'hidden', display: 'flex', background: 'var(--blank)' }}>
+      {segs.map((s, i) => <div key={i} style={{ width: ((s.b - s.a) / span) * 100 + '%', background: s.color }} />)}
+    </div>
+  );
+}
+
+function VBar({ st, max }) {
+  const h = 84;
+  const seg = (v, color) => v > 0 ? <div style={{ height: (v / max) * h, background: color }} /> : null;
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: h, borderRadius: 3, overflow: 'hidden', background: 'var(--line-2)' }}>
+      {seg(st.blank, 'var(--blank)')}{seg(st.C, 'var(--c)')}{seg(st.B, 'var(--b)')}{seg(st.A, 'var(--a)')}
+    </div>
+  );
+}
+
+function DateChips({ anchor, setAnchor, entries, lang }) {
+  const ref = useRef(null);
+  const days = []; for (let i = 13; i >= 0; i--) days.push(window.TT.addDays(window.TT.todayStr(), -i));
+  const hasData = (d) => entries.some((e) => e.date === d);
+  useEffect(() => { if (ref.current) { const sel = ref.current.querySelector('[data-sel="1"]'); if (sel) ref.current.scrollLeft = sel.offsetLeft - 120; } }, [anchor]);
+  return (
+    <div ref={ref} style={{ display: 'flex', gap: 7, overflowX: 'auto', padding: '2px 0 4px', marginBottom: 12 }} className="scroll">
+      {days.map((d) => {
+        const dd = window.TT.parseDate(d); const on = d === anchor;
+        return (
+          <button key={d} data-sel={on ? '1' : '0'} onClick={() => setAnchor(d)} style={{ flexShrink: 0, width: 44, padding: '7px 0 6px', borderRadius: 12, textAlign: 'center',
+            background: on ? 'var(--ink)' : 'var(--line-2)', color: on ? 'var(--bg)' : 'var(--ink-2)', transition: 'all .15s' }}>
+            <div style={{ fontSize: 10.5, fontWeight: 600, opacity: 0.8 }}>{window.TT.wdShort(dd.getDay(), lang)}</div>
+            <div className="tnum" style={{ fontSize: 16, fontWeight: 700, marginTop: 1 }}>{dd.getDate()}</div>
+            <div style={{ height: 4, marginTop: 2, display: 'flex', justifyContent: 'center' }}>{hasData(d) && <span style={{ width: 4, height: 4, borderRadius: 999, background: on ? 'var(--bg)' : 'var(--a)' }} />}</div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Analysis({ entries, activities, getDay, S, lang }) {
+  const [mode, setMode] = useState('week');
+  const [anchor, setAnchor] = useState(window.TT.todayStr());
+
+  let start, n, label;
+  if (mode === 'day') { start = anchor; n = 1; label = window.TT.dateTitle(anchor, lang); }
+  else if (mode === 'week') { start = window.TT.weekStart(anchor); n = 7; label = window.TT.weekLabel(start, lang); }
+  else { start = window.TT.monthStart(anchor); n = window.TT.daysInMonth(anchor); label = window.TT.monthLabel(start, lang); }
+
+  const { sum, perDay } = window.TT.computeRange(entries, getDay, start, n);
+  const periodTotal = sum.total || 1;
+  const waking = Math.max(0, sum.total);
+  const wpct = (m) => waking > 0 ? Math.round((m / waking) * 100) : 0;
+
+  const step = (dir) => {
+    if (mode === 'day') setAnchor(window.TT.addDays(anchor, dir));
+    else if (mode === 'week') setAnchor(window.TT.addDays(anchor, dir * 7));
+    else { const d = window.TT.parseDate(anchor); d.setMonth(d.getMonth() + dir); setAnchor(window.TT.toDateStr(d)); }
+  };
+
+  const actMap = Object.fromEntries(activities.map((a) => [a.id, a]));
+  const actRows = Object.entries(sum.byActivity).map(([id, mins]) => ({ act: actMap[id], mins })).filter((r) => r.act && r.mins > 0).sort((a, b) => b.mins - a.mins);
+  const actTotal = actRows.reduce((s, r) => s + r.mins, 0) || 1;
+  const hasData = (sum.A + sum.B + sum.C) > 0;
+  const maxDay = Math.max(...perDay.map((d) => d.A + d.B + d.C + d.blank), 60);
+
+  return (
+    <React.Fragment>
+      <div className="topbar"><div style={{ fontSize: 19, fontWeight: 700 }}>{S.tab_analysis}</div></div>
+      <div className="scroll">
+        <div className="page-pad">
+          <div style={{ marginBottom: 12 }}>
+            <SegControl value={mode} onChange={setMode} options={[{ value: 'day', label: S.seg_day }, { value: 'week', label: S.seg_week }, { value: 'month', label: S.seg_month }]} />
+          </div>
+
+          {mode === 'day' && <DateChips anchor={anchor} setAnchor={setAnchor} entries={entries} lang={lang} />}
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <button onClick={() => step(-1)} style={{ width: 34, height: 34, borderRadius: 999, background: 'var(--line-2)', color: 'var(--ink-2)', display: 'grid', placeItems: 'center' }}><Icon name="chevL" size={18} /></button>
+            <div style={{ fontSize: 15.5, fontWeight: 600 }}>{label}</div>
+            <button onClick={() => step(1)} style={{ width: 34, height: 34, borderRadius: 999, background: 'var(--line-2)', color: 'var(--ink-2)', display: 'grid', placeItems: 'center' }}><Icon name="chevR" size={18} /></button>
+          </div>
+
+          {!hasData && (
+            <div className="card" style={{ padding: 26, textAlign: 'center', color: 'var(--ink-3)' }}>
+              <div style={{ marginBottom: 6 }}><Icon name="chart" size={28} /></div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--ink-2)' }}>{S.noEntries}</div>
+              <div style={{ fontSize: 13.5, marginTop: 4 }}>{S.noEntriesSub}</div>
+            </div>
+          )}
+
+          {hasData && (
+            <React.Fragment>
+              <div className="card fade-in" style={{ padding: 16, marginBottom: 12 }}>
+                <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                  <Donut size={128} sw={16} centerTop={S.abPlus} centerBig={wpct(sum.A + sum.B) + '%'} centerSub={S.ofWaking}
+                    segs={[{ value: sum.A, color: 'var(--a)' }, { value: sum.B, color: 'var(--b)' }, { value: sum.C, color: 'var(--c)' }, { value: sum.blank, color: 'var(--blank)' }]} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <LegRow color="var(--a)" label={S.tile_A} mins={sum.A} pct={Math.round(sum.A / periodTotal * 100)} lang={lang} />
+                    <LegRow color="var(--b)" label={S.tile_B} mins={sum.B} pct={Math.round(sum.B / periodTotal * 100)} lang={lang} />
+                    <LegRow color="var(--c)" label={S.tile_C} mins={sum.C} pct={Math.round(sum.C / periodTotal * 100)} lang={lang} />
+                    <LegRow color="var(--blank)" label={S.unlogged} mins={sum.blank} pct={Math.round(sum.blank / periodTotal * 100)} lang={lang} />
+                  </div>
+                </div>
+              </div>
+
+              {(mode === 'day' || mode === 'week') && (
+                <div className="card fade-in" style={{ padding: 16, marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>{S.whereHours}</div>
+                  {mode === 'day' ? (
+                    <React.Fragment>
+                      <DayStrip dayEntries={window.TT.entriesForDate(entries, start)} wake={getDay(start).wake} bed={getDay(start).bed} height={28} />
+                      <div className="tnum" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--ink-3)', marginTop: 5, fontWeight: 500 }}>
+                        <span>{window.TT.minTo12(getDay(start).wake, lang)}</span>
+                        <span>{window.TT.minTo12(Math.round((getDay(start).wake + getDay(start).bed) / 2), lang)}</span>
+                        <span>{window.TT.minTo12(getDay(start).bed, lang)}</span>
+                      </div>
+                    </React.Fragment>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                      {perDay.map((d) => {
+                        const dd = window.TT.parseDate(d.date); const wk = Math.max(1, d.dayLen);
+                        return (
+                          <div key={d.date} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span style={{ width: 22, fontSize: 12, fontWeight: 600, color: window.TT.isToday(d.date) ? 'var(--ink)' : 'var(--ink-3)' }}>{window.TT.wdShort(dd.getDay(), lang)}</span>
+                            <div style={{ flex: 1 }}><DayStrip dayEntries={window.TT.entriesForDate(entries, d.date)} wake={getDay(d.date).wake} bed={getDay(d.date).bed} height={16} /></div>
+                            <span className="tnum" style={{ width: 32, textAlign: 'right', fontSize: 12, color: 'var(--ink-2)', fontWeight: 600 }}>{Math.round((d.A + d.B) / wk * 100)}%</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {mode === 'month' && (
+                <div className="card fade-in" style={{ padding: 16, marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 2 }}>{S.abcByDay}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 12 }}>{S.eachBar}</div>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2 }}>
+                    {perDay.map((d) => <VBar key={d.date} st={d} max={maxDay} />)}
+                  </div>
+                  <div className="tnum" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--ink-3)', marginTop: 6, fontWeight: 500 }}>
+                    <span>1</span><span>{Math.ceil(n / 2)}</span><span>{n}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="card fade-in" style={{ padding: 16 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 2 }}>{S.actBreakdown}</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 12 }}>{S.loggedAcross}</div>
+                {actRows.length === 0 && <div style={{ color: 'var(--ink-3)', fontSize: 14 }}>{S.noActsLogged}</div>}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+                  {actRows.map((r) => {
+                    const p = Math.round(r.mins / actTotal * 100);
+                    return (
+                      <div key={r.act.id}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 5 }}>
+                          <Dot color={r.act.color} size={9} />
+                          <span style={{ fontSize: 13.5, fontWeight: 600, flex: 1 }}>{window.TT.actName(r.act, S)}</span>
+                          <span className="tnum" style={{ fontSize: 12.5, color: 'var(--ink-2)', fontWeight: 600, whiteSpace: 'nowrap' }}>{window.TT.fmtDur(r.mins, lang)}</span>
+                          <span className="tnum" style={{ fontSize: 12.5, color: 'var(--ink-3)', width: 34, textAlign: 'right' }}>{p}%</span>
+                        </div>
+                        <div style={{ height: 7, borderRadius: 999, background: 'var(--line-2)', overflow: 'hidden' }}>
+                          <div style={{ width: p + '%', height: '100%', background: r.act.color, borderRadius: 999, transition: 'width .5s' }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </React.Fragment>
+          )}
+        </div>
+      </div>
+    </React.Fragment>
+  );
+}
+
+Object.assign(window, { Analysis });
+</script>
+
+<script type="text/babel" data-presets="react">
+/* ============================ Settings ============================ */
+function ActivitySheet({ editing, S, onClose, onSave }) {
+  const [name, setName] = useState('');
+  useEffect(() => { if (editing) setName(editing.name || ''); }, [editing]);
+  const valid = name.trim().length > 0;
+  return (
+    <Sheet open={!!editing} onClose={onClose} title={editing && editing.id ? S.renameActivity : S.newActivity}
+      footer={<button className="btn btn-primary btn-block" disabled={!valid} style={{ opacity: valid ? 1 : 0.4 }} onClick={() => valid && onSave(name.trim())}>{S.save}</button>}>
+      <div className="field-label">{S.activityName}</div>
+      <input className="text-input" value={name} autoFocus placeholder={S.actPlaceholder}
+        onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && valid) onSave(name.trim()); }} />
+      <div style={{ height: 4 }} />
+    </Sheet>
+  );
+}
+
+function Settings({ activities, settings, actions, entryCount, S, lang }) {
+  const [editing, setEditing] = useState(null);
+  const [boundsOpen, setBoundsOpen] = useState(false);
+
+  return (
+    <React.Fragment>
+      <div className="topbar"><div style={{ fontSize: 19, fontWeight: 700 }}>{S.tab_settings}</div></div>
+      <div className="scroll">
+        <div className="page-pad">
+          {/* Language */}
+          <div style={{ fontSize: 13.5, fontWeight: 700, margin: '6px 2px 9px' }}>{S.language}</div>
+          <SegControl value={lang} onChange={(v) => actions.setSettings({ lang: v })} options={[{ value: 'en', label: 'English' }, { value: 'zh', label: '繁體中文' }]} />
+
+          {/* Activities */}
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', margin: '24px 2px 8px' }}>
+            <span style={{ fontSize: 13.5, fontWeight: 700 }}>{S.activities}</span>
+            <span style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>{activities.length}</span>
+          </div>
+          <p style={{ margin: '0 2px 12px', fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.5 }}>{S.tagEvery}</p>
+          <div className="card" style={{ overflow: 'hidden' }}>
+            {activities.map((a, i) => (
+              <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderTop: i ? '1px solid var(--line)' : 'none' }}>
+                <Dot color={a.color} size={12} />
+                <span style={{ flex: 1, fontSize: 15, fontWeight: 500 }}>{window.TT.actName(a, S)}</span>
+                <button onClick={() => setEditing({ id: a.id, name: window.TT.actName(a, S) })} aria-label="rename" style={{ width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center', color: 'var(--ink-2)', background: 'var(--line-2)' }}><Icon name="pencil" size={15} /></button>
+                <button onClick={() => actions.deleteActivity(a.id)} aria-label="delete" style={{ width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center', color: 'var(--c)', background: 'var(--c-t)' }}><Icon name="trash" size={15} /></button>
+              </div>
+            ))}
+            {activities.length === 0 && <div style={{ padding: 18, textAlign: 'center', color: 'var(--ink-3)', fontSize: 14 }}>—</div>}
+          </div>
+          <button className="btn btn-ghost btn-block" style={{ marginTop: 11, padding: 13 }} onClick={() => setEditing({ name: '' })}><Icon name="plus" size={18} />{S.addActivity}</button>
+
+          {/* Default day */}
+          <div style={{ fontSize: 13.5, fontWeight: 700, margin: '24px 2px 9px' }}>{S.defaultDay}</div>
+          <button onClick={() => setBoundsOpen(true)} className="card" style={{ width: '100%', padding: '14px 15px', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+              <span style={{ width: 36, height: 36, borderRadius: 11, background: 'var(--s-t)', color: 'var(--s)', display: 'grid', placeItems: 'center' }}><Icon name="sun" size={18} /></span>
+              <span>
+                <span style={{ display: 'block', fontSize: 14.5, fontWeight: 600, whiteSpace: 'nowrap' }}>{S.wakeBed}</span>
+                <span className="tnum" style={{ fontSize: 12, color: 'var(--ink-3)' }}>{window.TT.minTo12(settings.wake, lang)} · {window.TT.minTo12(settings.bed, lang)}</span>
+              </span>
+            </span>
+            <span style={{ color: 'var(--ink-3)' }}><Icon name="chevR" size={18} /></span>
+          </button>
+          <p style={{ margin: '9px 2px 0', fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.5 }}>{S.defaultDayDesc}</p>
+
+          {/* Data */}
+          <div style={{ fontSize: 13.5, fontWeight: 700, margin: '24px 2px 9px' }}>{S.data}</div>
+          <div className="card" style={{ padding: '13px 15px', fontSize: 14, color: 'var(--ink-2)' }}>{entryCount} {lang === 'zh' ? '' : ''}{entryCount === 1 ? S.entry : S.entries} {S.stored}</div>
+          <button className="btn btn-block" style={{ marginTop: 11, padding: 13, background: 'var(--c-t)', color: 'var(--c)' }}
+            onClick={() => { if (confirm(S.resetConfirm)) actions.clearAll(); }}>{S.resetAll}</button>
+
+          <div style={{ textAlign: 'center', color: 'var(--ink-3)', fontSize: 11.5, marginTop: 22 }}>{S.savedLocally}</div>
+        </div>
+      </div>
+
+      <ActivitySheet editing={editing} S={S} onClose={() => setEditing(null)}
+        onSave={(name) => { if (editing.id) actions.renameActivity(editing.id, name); else actions.addActivity(name); setEditing(null); }} />
+      <SleepSheet open={boundsOpen} wake={settings.wake} bed={settings.bed} S={S} lang={lang}
+        onClose={() => setBoundsOpen(false)} onSave={(w, b) => { actions.setSettings({ wake: w, bed: b }); setBoundsOpen(false); }} />
+    </React.Fragment>
+  );
+}
+
+Object.assign(window, { Settings });
+</script>
+
+<script type="text/babel" data-presets="react">
+/* ============================ Vision ============================ */
+function Vision({ vision, actions, S }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(vision);
+  useEffect(() => { setDraft(vision); }, [vision, editing]);
+
+  const fields = [
+    { key: 'vision', icon: 'eye', color: 'oklch(0.62 0.09 250)' },
+    { key: 'mission', icon: 'flag', color: 'oklch(0.62 0.09 150)' },
+    { key: 'values', icon: 'heart', color: 'oklch(0.605 0.145 27)' },
+    { key: 'strategies', icon: 'route', color: 'oklch(0.64 0.09 95)' },
+    { key: 'goals', icon: 'target', color: 'oklch(0.62 0.09 310)' },
+  ];
+
+  const startEdit = () => { setDraft(vision); setEditing(true); };
+  const saveEdit = () => { actions.setVision(draft); setEditing(false); };
+
+  return (
+    <React.Fragment>
+      <div className="topbar"><div style={{ fontSize: 19, fontWeight: 700 }}>{S.tab_vision}</div></div>
+
+      <div className="scroll">
+        <div className="page-pad" style={{ paddingTop: 4 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {fields.map((f) => {
+              const label = S['v_' + f.key];
+              const prompt = S['vp_' + f.key];
+              const val = (editing ? draft[f.key] : vision[f.key]) || '';
+              return (
+                <div key={f.key} className="card fade-in" style={{ padding: 15, borderLeft: '3px solid ' + f.color }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: editing ? 9 : 7 }}>
+                    <span style={{ color: f.color, display: 'grid', placeItems: 'center' }}><Icon name={f.icon} size={16} /></span>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: f.color, letterSpacing: '0.03em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{label}</span>
+                  </div>
+                  {editing ? (
+                    <textarea className="text-input vision-ta" value={draft[f.key] || ''} placeholder={prompt} rows={3}
+                      onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))} />
+                  ) : (
+                    val
+                      ? <div style={{ fontSize: 15.5, lineHeight: 1.5, color: 'var(--ink)', whiteSpace: 'pre-wrap', textWrap: 'pretty' }}>{val}</div>
+                      : <div style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--ink-3)', fontStyle: 'italic' }}>{prompt}</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* single edit/save button pinned at the bottom */}
+      <div style={{ padding: '11px 18px calc(11px + env(safe-area-inset-bottom))', borderTop: '1px solid var(--line)', background: 'var(--bg)', flexShrink: 0 }}>
+        {editing ? (
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="btn btn-ghost" style={{ padding: 14 }} onClick={() => setEditing(false)}><Icon name="x" size={18} /></button>
+            <button className="btn btn-primary btn-block" style={{ flex: 1 }} onClick={saveEdit}>{S.v_save}</button>
+          </div>
+        ) : (
+          <button className="btn btn-primary btn-block" style={{ padding: 14 }} onClick={startEdit}><Icon name="pencil" size={17} />{S.v_edit}</button>
+        )}
+      </div>
+    </React.Fragment>
+  );
+}
+
+Object.assign(window, { Vision });
+</script>
+
+
+<script type="text/babel" data-presets="react">
+/* ============================ App root ============================ */
+function App() {
+  const T = window.TT;
+  const [tab, setTab] = useState('home');
+  const [date, setDate] = useState(T.todayStr());
+  const [entries, setEntries] = useState(() => T.load('entries', []));
+  const [activities, setActivities] = useState(() => T.load('activities', T.DEFAULT_ACTIVITIES));
+  const [days, setDays] = useState(() => T.load('days', {}));
+  const [settings, setSettings] = useState(() => ({ ...T.DEFAULT_SETTINGS, ...T.load('settings', {}) }));
+  const [vision, setVision] = useState(() => ({ vision: '', mission: '', values: '', strategies: '', goals: '', ...T.load('vision', {}) }));
+
+  useEffect(() => { T.save('entries', entries); }, [entries]);
+  useEffect(() => { T.save('activities', activities); }, [activities]);
+  useEffect(() => { T.save('days', days); }, [days]);
+  useEffect(() => { T.save('settings', settings); }, [settings]);
+  useEffect(() => { T.save('vision', vision); }, [vision]);
+
+  const lang = settings.lang || 'en';
+  window.__lang = lang;
+  const S = T.strings(lang);
+  useEffect(() => { document.body.className = lang === 'zh' ? 'lang-zh' : ''; document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : 'en'; }, [lang]);
+
+  const getDay = (d) => days[d] || { wake: settings.wake, bed: settings.bed };
+
+  const actions = {
+    addEntry: (d, data) => setEntries((es) => [...es, { id: T.uid(), date: d, name: data.name, start: data.start, end: data.end, cat: data.cat, activityId: data.activityId }]),
+    updateEntry: (id, data) => setEntries((es) => es.map((e) => e.id === id ? { ...e, name: data.name, start: data.start, end: data.end, cat: data.cat, activityId: data.activityId } : e)),
+    deleteEntry: (id) => setEntries((es) => es.filter((e) => e.id !== id)),
+    setDay: (d, b) => setDays((ds) => ({ ...ds, [d]: { wake: b.wake, bed: b.bed } })),
+    setSettings: (b) => setSettings((s) => ({ ...s, ...b })),
+    setVision: (v) => setVision(v),
+    addActivity: (name) => setActivities((as) => [...as, { id: T.uid(), name, color: T.ACT_COLORS[as.length % T.ACT_COLORS.length] }]),
+    renameActivity: (id, name) => setActivities((as) => as.map((a) => a.id === id ? { ...a, name, nameKey: undefined } : a)),
+    deleteActivity: (id) => setActivities((as) => as.filter((a) => a.id !== id)),
+    clearAll: () => { setEntries([]); setActivities(T.DEFAULT_ACTIVITIES); setDays({}); setVision({ vision: '', mission: '', values: '', strategies: '', goals: '' }); setSettings((s) => ({ ...T.DEFAULT_SETTINGS, lang: s.lang })); },
+  };
+
+  const tabs = [
+    { key: 'home', label: S.tab_today, icon: 'cal' },
+    { key: 'analysis', label: S.tab_analysis, icon: 'chart' },
+    { key: 'vision', label: S.tab_vision, icon: 'compass' },
+    { key: 'settings', label: S.tab_settings, icon: 'sliders' },
+  ];
+
+  return (
+    <div className="app">
+      {tab === 'home' && <Home entries={entries} activities={activities} date={date} setDate={setDate} day={getDay(date)} actions={actions} S={S} lang={lang} />}
+      {tab === 'analysis' && <Analysis entries={entries} activities={activities} getDay={getDay} S={S} lang={lang} />}
+      {tab === 'vision' && <Vision vision={vision} actions={actions} S={S} />}
+      {tab === 'settings' && <Settings activities={activities} settings={settings} actions={actions} entryCount={entries.length} S={S} lang={lang} />}
+      <nav className="tabbar">
+        {tabs.map((t) => (
+          <button key={t.key} className={'tab' + (tab === t.key ? ' active' : '')} onClick={() => setTab(t.key)}>
+            <Icon name={t.icon} size={23} stroke={tab === t.key ? 2.1 : 1.8} />{t.label}
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+
+<script>
+/* Register the service worker so the app is installable + offline-capable.
+   No-op on file:// — a service worker requires an http(s) origin. */
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function (e) {
+      console.warn('SW registration failed:', e);
+    });
+  });
+}
+</script>
+</body>
+</html>
+
+
+
+
