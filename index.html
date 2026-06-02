@@ -1403,13 +1403,25 @@ function useFirebaseSync(data, applyRemote) {
     }
   }, [data, user, configured]);
 
-  const signIn = useCallback(() => {
+  const signIn = useCallback(async () => {
     const auth = authRef.current; if (!auth) return;
     setError(null);
     const provider = new window.firebase.auth.GoogleAuthProvider();
     const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-    if (standalone) auth.signInWithRedirect(provider);
-    else auth.signInWithPopup(provider).catch(() => auth.signInWithRedirect(provider));
+    try {
+      if (standalone) { await auth.signInWithRedirect(provider); return; }
+      try {
+        await auth.signInWithPopup(provider);
+      } catch (e) {
+        const code = e && e.code;
+        if (code === 'auth/popup-blocked') { await auth.signInWithRedirect(provider); return; }
+        if (code === 'auth/cancelled-popup-request' || code === 'auth/popup-closed-by-user') return; // user dismissed
+        throw e;
+      }
+    } catch (e) {
+      setError((e && (e.code || e.message)) || String(e));
+      setStatus('error');
+    }
   }, []);
   const signOut = useCallback(() => { if (authRef.current) authRef.current.signOut(); }, []);
 
