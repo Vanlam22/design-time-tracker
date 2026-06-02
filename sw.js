@@ -1,21 +1,24 @@
 /* Time Tracker service worker — offline-capable PWA.
    Bump CACHE when you change the shell or the pinned CDN deps. */
-const CACHE = 'tt-v1';
+const CACHE = 'tt-v2';
 
 /* Same-origin app shell. */
 const SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
+  './firebase-config.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
   './icons/favicon-32.png',
 ];
 
-/* Cross-origin runtime deps the app loads (React, ReactDOM, Babel, fonts).
-   These are version-pinned and immutable, so cache-first is safe. */
-const RUNTIME_HOSTS = ['unpkg.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
+/* Cross-origin runtime deps the app loads (React, ReactDOM, Babel, Firebase SDK,
+   fonts). These are version-pinned and immutable, so cache-first is safe.
+   Note: Firebase auth/Firestore API calls go to other hosts and stay network-only
+   (Firestore has its own offline persistence). */
+const RUNTIME_HOSTS = ['unpkg.com', 'www.gstatic.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

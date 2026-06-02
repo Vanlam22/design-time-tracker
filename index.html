@@ -177,6 +177,12 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
+<!-- Firebase (compat build — exposes window.firebase, matches this app's global-script style) -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+
 <script type="text/babel" data-presets="react">
 /* ============================ store + i18n ============================ */
 (function () {
@@ -226,6 +232,10 @@
       defaultDay: 'Default day', wakeBed: 'Start & end of day',
       defaultDayDesc: 'Default day window for new days. You can still adjust any individual day.',
       language: 'Language', data: 'Data', stored: 'stored on this device',
+      account: 'Account', sync: 'Cloud sync',
+      syncDesc: 'Sign in to back up your data and keep it in sync across all your devices.',
+      signIn: 'Sign in with Google', signOut: 'Sign out', signedInAs: 'Signed in as',
+      synced: 'Synced', syncing: 'Syncing…', syncOffline: 'Offline — will sync later', syncError: 'Sync error',
       resetAll: 'Reset all data', resetConfirm: 'Erase all entries, activities and settings? This cannot be undone.',
       savedLocally: 'Time Tracker · saved locally in your browser',
       entry: 'entry', entries: 'entries',
@@ -266,6 +276,10 @@
       defaultDay: '預設一天', wakeBed: '一天起訖時間',
       defaultDayDesc: '新一天的預設起訖時間，仍可調整個別日期。',
       language: '語言', data: '資料', stored: '筆記錄儲存在此裝置',
+      account: '帳號', sync: '雲端同步',
+      syncDesc: '登入即可備份資料，並在你所有的裝置間同步。',
+      signIn: '使用 Google 登入', signOut: '登出', signedInAs: '登入身分',
+      synced: '已同步', syncing: '同步中…', syncOffline: '離線中 — 稍後自動同步', syncError: '同步發生錯誤',
       resetAll: '重設所有資料', resetConfirm: '確定清除所有記錄、活動與設定嗎？此動作無法復原。',
       savedLocally: '時間追蹤 · 資料儲存在您的瀏覽器',
       entry: '項', entries: '項',
@@ -1091,15 +1105,52 @@ function ActivitySheet({ editing, S, onClose, onSave }) {
   );
 }
 
-function Settings({ activities, settings, actions, entryCount, S, lang }) {
+function Settings({ activities, settings, actions, entryCount, sync, S, lang }) {
   const [editing, setEditing] = useState(null);
   const [boundsOpen, setBoundsOpen] = useState(false);
+
+  const syncLabel = sync && sync.status === 'synced' ? S.synced
+    : sync && sync.status === 'syncing' ? (navigator.onLine ? S.syncing : S.syncOffline)
+    : sync && sync.status === 'error' ? S.syncError : '';
+  const syncDot = sync && sync.status === 'synced' ? 'var(--a)'
+    : sync && sync.status === 'error' ? 'var(--c)' : 'var(--b)';
 
   return (
     <React.Fragment>
       <div className="topbar"><div style={{ fontSize: 19, fontWeight: 700 }}>{S.tab_settings}</div></div>
       <div className="scroll">
         <div className="page-pad">
+          {/* Account / cloud sync */}
+          {sync && sync.configured && (
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, margin: '6px 2px 9px' }}>{S.account}</div>
+              {sync.user ? (
+                <div className="card" style={{ padding: '13px 15px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+                    <span style={{ width: 36, height: 36, borderRadius: 11, background: 'var(--a-t)', color: 'var(--a)', display: 'grid', placeItems: 'center' }}><Icon name="globe" size={18} /></span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, color: 'var(--ink-3)', fontWeight: 600 }}>{S.signedInAs}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sync.user.email || sync.user.displayName}</div>
+                    </div>
+                    {syncLabel && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                        <Dot color={syncDot} size={7} />
+                        <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink-2)', whiteSpace: 'nowrap' }}>{syncLabel}</span>
+                      </span>
+                    )}
+                  </div>
+                  <button className="btn btn-ghost btn-block" style={{ marginTop: 12, padding: 11 }} onClick={sync.signOut}>{S.signOut}</button>
+                </div>
+              ) : (
+                <div className="card" style={{ padding: 16 }}>
+                  <p style={{ margin: '0 0 13px', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>{S.syncDesc}</p>
+                  <button className="btn btn-primary btn-block" style={{ padding: 13 }} onClick={sync.signIn}><Icon name="globe" size={18} />{S.signIn}</button>
+                  {sync.error && <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--c)', fontWeight: 600 }}>{S.syncError}: {sync.error}</div>}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Language */}
           <div style={{ fontSize: 13.5, fontWeight: 700, margin: '6px 2px 9px' }}>{S.language}</div>
           <SegControl value={lang} onChange={(v) => actions.setSettings({ lang: v })} options={[{ value: 'en', label: 'English' }, { value: 'zh', label: '繁體中文' }]} />
@@ -1228,6 +1279,146 @@ Object.assign(window, { Vision });
 
 
 <script type="text/babel" data-presets="react">
+/* ============================ Firebase cloud sync ============================ */
+/* Syncs the whole dataset as one doc per user (users/{uid}). Whole-document
+   last-write-wins, using a stable (key-sorted) stringify to detect real changes
+   and avoid echo loops between local edits and remote snapshots. Runs as a no-op
+   when firebase-config.js has no apiKey, so the app still works local-only. */
+function useFirebaseSync(data, applyRemote) {
+  const T = window.TT;
+  const cfg = window.FIREBASE_CONFIG;
+  const configured = !!(cfg && cfg.apiKey && window.firebase);
+
+  const [user, setUser] = useState(null);
+  const [status, setStatus] = useState('idle'); // idle | syncing | synced | error
+  const [error, setError] = useState(null);
+
+  const authRef = useRef(null);
+  const dbRef = useRef(null);
+  const unsubDoc = useRef(null);
+  const writeTimer = useRef(null);
+  const lastPayload = useRef(null);
+  const localUpd = useRef(((T.load('sync', { updatedAt: 0 })) || {}).updatedAt || 0);
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
+  // canonical, defaulted view of the syncable data
+  const pack = (d) => ({
+    entries: d.entries || [],
+    activities: d.activities || [],
+    days: d.days || {},
+    settings: {
+      wake: (d.settings && d.settings.wake != null) ? d.settings.wake : T.DEFAULT_SETTINGS.wake,
+      bed: (d.settings && d.settings.bed != null) ? d.settings.bed : T.DEFAULT_SETTINGS.bed,
+      lang: (d.settings && d.settings.lang) || 'en',
+    },
+    vision: {
+      vision: (d.vision && d.vision.vision) || '', mission: (d.vision && d.vision.mission) || '',
+      values: (d.vision && d.vision.values) || '', strategies: (d.vision && d.vision.strategies) || '',
+      goals: (d.vision && d.vision.goals) || '',
+    },
+  });
+  // stable stringify: sort object keys (arrays keep order) so equal content == equal string
+  const stable = (o) => {
+    if (Array.isArray(o)) return '[' + o.map(stable).join(',') + ']';
+    if (o && typeof o === 'object') return '{' + Object.keys(o).sort().map((k) => JSON.stringify(k) + ':' + stable(o[k])).join(',') + '}';
+    return JSON.stringify(o === undefined ? null : o);
+  };
+  const ser = (d) => stable(pack(d));
+  if (lastPayload.current === null) lastPayload.current = ser(data);
+
+  // init firebase + auth listener
+  useEffect(() => {
+    if (!configured) return;
+    let app;
+    try { app = window.firebase.apps.length ? window.firebase.app() : window.firebase.initializeApp(cfg); }
+    catch (e) { setError(e.message || String(e)); setStatus('error'); return; }
+    const auth = window.firebase.auth();
+    const db = window.firebase.firestore();
+    authRef.current = auth; dbRef.current = db;
+    db.enablePersistence({ synchronizeTabs: true }).catch(function () {});
+    auth.getRedirectResult().catch((e) => { setError(e.message); setStatus('error'); });
+
+    const startDocSync = (uid) => {
+      const ref = db.collection('users').doc(uid);
+      setStatus('syncing');
+      let seeded = false;
+      unsubDoc.current = ref.onSnapshot((snap) => {
+        if (!snap.exists) {
+          if (!seeded) {
+            seeded = true;
+            const packed = pack(dataRef.current);
+            lastPayload.current = stable(packed);
+            ref.set(Object.assign({}, packed, { updatedAt: Date.now() }))
+              .then(() => setStatus('synced')).catch((e) => { setError(e.message); setStatus('error'); });
+          }
+          return;
+        }
+        seeded = true;
+        const remote = snap.data();
+        const rUpd = remote.updatedAt || 0;
+        const remotePacked = pack({ entries: remote.entries, activities: remote.activities, days: remote.days, settings: remote.settings || {}, vision: remote.vision || {} });
+        const remoteStr = stable(remotePacked);
+        if (remoteStr === lastPayload.current) { setStatus('synced'); return; }
+        if (rUpd >= localUpd.current) {           // remote wins → pull
+          lastPayload.current = remoteStr;
+          localUpd.current = rUpd;
+          T.save('sync', { updatedAt: rUpd });
+          applyRemote(remotePacked);
+          setStatus('synced');
+        } else {                                   // local is newer → push
+          const packed = pack(dataRef.current);
+          lastPayload.current = stable(packed);
+          ref.set(Object.assign({}, packed, { updatedAt: localUpd.current }))
+            .then(() => setStatus('synced')).catch((e) => { setError(e.message); setStatus('error'); });
+        }
+      }, (e) => { setError(e.message); setStatus('error'); });
+    };
+
+    const unsubAuth = auth.onAuthStateChanged((u) => {
+      setUser(u || null);
+      if (unsubDoc.current) { unsubDoc.current(); unsubDoc.current = null; }
+      if (u) startDocSync(u.uid); else setStatus('idle');
+    });
+    return () => { unsubAuth(); if (unsubDoc.current) unsubDoc.current(); };
+  }, [configured]);
+
+  // local edits → bump version, persist locally, debounce-push to cloud
+  useEffect(() => {
+    const packed = pack(data);
+    const str = stable(packed);
+    if (str === lastPayload.current) return;     // unchanged / echo of a remote pull
+    const now = Date.now();
+    localUpd.current = now;
+    lastPayload.current = str;
+    T.save('sync', { updatedAt: now });
+    if (configured && user && dbRef.current) {
+      setStatus('syncing');
+      clearTimeout(writeTimer.current);
+      const uid = user.uid;
+      writeTimer.current = setTimeout(() => {
+        dbRef.current.collection('users').doc(uid).set(Object.assign({}, packed, { updatedAt: now }))
+          .then(() => setStatus('synced')).catch((e) => { setError(e.message); setStatus('error'); });
+      }, 700);
+    }
+  }, [data, user, configured]);
+
+  const signIn = useCallback(() => {
+    const auth = authRef.current; if (!auth) return;
+    setError(null);
+    const provider = new window.firebase.auth.GoogleAuthProvider();
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    if (standalone) auth.signInWithRedirect(provider);
+    else auth.signInWithPopup(provider).catch(() => auth.signInWithRedirect(provider));
+  }, []);
+  const signOut = useCallback(() => { if (authRef.current) authRef.current.signOut(); }, []);
+
+  return { configured, user, status, error, signIn, signOut };
+}
+Object.assign(window, { useFirebaseSync });
+</script>
+
+<script type="text/babel" data-presets="react">
 /* ============================ App root ============================ */
 function App() {
   const T = window.TT;
@@ -1249,6 +1440,17 @@ function App() {
   window.__lang = lang;
   const S = T.strings(lang);
   useEffect(() => { document.body.className = lang === 'zh' ? 'lang-zh' : ''; document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : 'en'; }, [lang]);
+
+  // cloud sync (no-op until firebase-config.js is filled in)
+  const data = { entries, activities, days, settings, vision };
+  const applyRemote = useCallback((d) => {
+    if (d.entries) setEntries(d.entries);
+    if (d.activities) setActivities(d.activities);
+    if (d.days) setDays(d.days);
+    if (d.settings) setSettings((s) => ({ ...T.DEFAULT_SETTINGS, ...s, ...d.settings }));
+    if (d.vision) setVision((v) => ({ ...v, ...d.vision }));
+  }, []);
+  const sync = window.useFirebaseSync(data, applyRemote);
 
   const getDay = (d) => days[d] || { wake: settings.wake, bed: settings.bed };
 
@@ -1277,7 +1479,7 @@ function App() {
       {tab === 'home' && <Home entries={entries} activities={activities} date={date} setDate={setDate} day={getDay(date)} actions={actions} S={S} lang={lang} />}
       {tab === 'analysis' && <Analysis entries={entries} activities={activities} getDay={getDay} S={S} lang={lang} />}
       {tab === 'vision' && <Vision vision={vision} actions={actions} S={S} />}
-      {tab === 'settings' && <Settings activities={activities} settings={settings} actions={actions} entryCount={entries.length} S={S} lang={lang} />}
+      {tab === 'settings' && <Settings activities={activities} settings={settings} actions={actions} entryCount={entries.length} sync={sync} S={S} lang={lang} />}
       <nav className="tabbar">
         {tabs.map((t) => (
           <button key={t.key} className={'tab' + (tab === t.key ? ' active' : '')} onClick={() => setTab(t.key)}>
