@@ -1136,6 +1136,7 @@ function Settings({ activities, settings, actions, entryCount, sync, S, lang }) 
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12, color: 'var(--ink-3)', fontWeight: 600 }}>{S.signedInAs}</div>
                       <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sync.user.email || sync.user.displayName}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--ink-3)', fontFamily: 'ui-monospace, monospace', marginTop: 1 }}>ID {sync.user.uid.slice(0, 12)}</div>
                     </div>
                     {syncLabel && (
                       <span style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
