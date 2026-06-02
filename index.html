@@ -168,6 +168,16 @@
   .press-ghost { position: absolute; left: 52px; right: 8px; border-radius: 9px;
     border: 2px dashed var(--ink-3); background: rgba(120,114,104,0.08); pointer-events: none;
     display: flex; align-items: center; justify-content: center; color: var(--ink-2); font-weight: 600; font-size: 13px; z-index: 5; }
+
+  /* Wheel time picker */
+  .wtime-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; }
+  .wtime-lbl { width: 42px; flex-shrink: 0; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  .wtime-band { flex: 1; display: flex; gap: 6px; height: 42px; background: var(--line-2); border-radius: 11px; }
+  .wtime-col { flex: 1; height: 42px; overflow-y: scroll; scroll-snap-type: y mandatory;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none; }
+  .wtime-col::-webkit-scrollbar { width: 0; height: 0; display: none; }
+  .wtime-item { height: 42px; scroll-snap-align: center; display: flex; align-items: center; justify-content: center;
+    font-size: 19px; font-weight: 700; color: var(--ink); }
 </style>
 </head>
 <body>
@@ -558,6 +568,71 @@ function CompactTime({ label, value, onChange, lang }) {
   );
 }
 
+function WheelTime({ label, value, onChange, lang }) {
+  const T = window.TT;
+  const HOURS = ['12', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'];
+  const MINS = ['00', '15', '30', '45'];
+  const APS = lang === 'zh' ? ['上午', '下午'] : ['AM', 'PM'];
+  const COLS = [HOURS, MINS, APS];
+  const ROW = 42;
+
+  const decompose = (val) => {
+    const v = T.snap15(T.clampMin(val));
+    let h24 = Math.floor(v / 60), m = v % 60;
+    if (h24 > 23) { h24 = 23; m = 45; }
+    const ai = h24 < 12 ? 0 : 1;
+    let h12 = h24 % 12; if (h12 === 0) h12 = 12;
+    const hi = HOURS.indexOf(String(h12));
+    let mi = MINS.indexOf(T.pad2(m)); if (mi < 0) mi = 0;
+    return [hi < 0 ? 0 : hi, mi, ai];
+  };
+  const compose = (hi, mi, ai) => {
+    const h12 = parseInt(HOURS[hi], 10);
+    const m = parseInt(MINS[mi], 10);
+    const h24 = (h12 % 12) + (ai === 1 ? 12 : 0);
+    return T.clampMin(h24 * 60 + m);
+  };
+
+  const refs = [useRef(null), useRef(null), useRef(null)];
+  const timers = useRef([null, null, null]);
+  const programmatic = useRef(false);
+  const cur = decompose(value);
+
+  // keep the columns positioned to match the current value
+  useEffect(() => {
+    programmatic.current = true;
+    refs.forEach((r, i) => { if (r.current) r.current.scrollTop = cur[i] * ROW; });
+    const t = setTimeout(() => { programmatic.current = false; }, 70);
+    return () => clearTimeout(t);
+  }, [value, lang]);
+
+  const onColScroll = (ci) => () => {
+    if (programmatic.current) return;
+    clearTimeout(timers.current[ci]);
+    timers.current[ci] = setTimeout(() => {
+      const el = refs[ci].current; if (!el) return;
+      let i = Math.round(el.scrollTop / ROW);
+      i = Math.max(0, Math.min(COLS[ci].length - 1, i));
+      const next = decompose(value); next[ci] = i;
+      const nv = compose(next[0], next[1], next[2]);
+      if (nv !== T.snap15(T.clampMin(value))) onChange(nv);
+    }, 130);
+  };
+
+  return (
+    <div className="wtime-row">
+      <span className="wtime-lbl">{label}</span>
+      <div className="wtime-band">
+        {COLS.map((items, ci) => (
+          <div key={ci} className={'wtime-col' + (ci < 2 ? ' tnum' : '')} ref={refs[ci]} onScroll={onColScroll(ci)}>
+            {items.map((it, ii) => <div key={ii} className="wtime-item">{it}</div>)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function EntrySheet({ open, draft, activities, pastNames, S, lang, onClose, onSave, onDelete }) {
   const [name, setName] = useState('');
   const [start, setStart] = useState(540);
@@ -598,13 +673,10 @@ function EntrySheet({ open, draft, activities, pastNames, S, lang, onClose, onSa
         <datalist id="tt-names">{pastNames.map((n) => <option key={n} value={n} />)}</datalist>
       </div>
 
-      <div style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 13, padding: '12px 14px', marginBottom: 13 }}>
-        <CompactTime label={S.start} value={start} lang={lang} onChange={(v) => { setStart(v); setEnd(window.TT.clampMin(v + 60)); }} />
-        <div style={{ height: 1, background: 'var(--line-2)', margin: '10px 0' }} />
-        <CompactTime label={S.end} value={end} lang={lang} onChange={setEnd} />
-        <div style={{ textAlign: 'right', marginTop: 9, color: end - start > 0 ? 'var(--ink-3)' : 'var(--c)', fontSize: 12.5, fontWeight: 600 }}>
-          {end - start > 0 ? window.TT.fmtDur(end - start, lang) + ' · ' + S.snapNote : S.endAfter}
-        </div>
+      <div style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 13, padding: '2px 14px', marginBottom: 13 }}>
+        <WheelTime label={S.start} value={start} lang={lang} onChange={(v) => { setStart(v); setEnd(window.TT.clampMin(v + 60)); }} />
+        <div style={{ height: 1, background: 'var(--line-2)' }} />
+        <WheelTime label={S.end} value={end} lang={lang} onChange={setEnd} />
       </div>
 
       <div style={{ marginBottom: 13 }}>
@@ -652,10 +724,10 @@ function SleepSheet({ open, wake, bed, S, lang, onClose, onSave }) {
     <Sheet open={open} onClose={onClose} title={S.sleepBounds}
       footer={<button className="btn btn-primary btn-block" onClick={() => onSave(w, b)}>{S.save}</button>}>
       <p style={{ color: 'var(--ink-2)', fontSize: 14, lineHeight: 1.5, marginTop: 0, marginBottom: 16 }}>{S.sleepDesc}</p>
-      <div style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 13, padding: '12px 14px', marginBottom: 14 }}>
-        <CompactTime label={S.wakeUp} value={w} onChange={setW} lang={lang} />
-        <div style={{ height: 1, background: 'var(--line-2)', margin: '10px 0' }} />
-        <CompactTime label={S.bedtime} value={b} onChange={setB} lang={lang} />
+      <div style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 13, padding: '2px 14px', marginBottom: 14 }}>
+        <WheelTime label={S.wakeUp} value={w} onChange={setW} lang={lang} />
+        <div style={{ height: 1, background: 'var(--line-2)' }} />
+        <WheelTime label={S.bedtime} value={b} onChange={setB} lang={lang} />
       </div>
       <div className="card" style={{ padding: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink-2)' }}>{S.dayLength}</span>
@@ -799,7 +871,10 @@ function Home({ entries, activities, date, setDate, day, actions, S, lang }) {
 
   const openNew = (startMin) => {
     let s = startMin;
-    if (s == null) s = dayEntries.length ? dayEntries[dayEntries.length - 1].end : day.wake;
+    if (s == null) {
+      if (dayEntries.length) s = dayEntries[dayEntries.length - 1].end;
+      else { const d = new Date(); s = d.getHours() * 60 + d.getMinutes(); } // default to now
+    }
     s = window.TT.clampMin(window.TT.snap15(s));
     const e = window.TT.clampMin(s + 60);
     setSheet({ name: '', start: s, end: e > s ? e : s + 60, cat: 'A', activityId: activities[0] && activities[0].id });
