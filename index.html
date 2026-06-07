@@ -573,8 +573,15 @@ function WheelTime({ label, value, onChange, lang }) {
   const HOURS = ['12', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'];
   const MINS = ['00', '15', '30', '45'];
   const APS = lang === 'zh' ? ['上午', '下午'] : ['AM', 'PM'];
-  const COLS = [HOURS, MINS, APS];
+  const BASES = [HOURS, MINS, APS];
+  const LOOP = [true, true, false];   // hour & minute wrap around; AM/PM is a flat 2-option list
   const ROW = 42;
+
+  // looping columns repeat the base list around a center copy so 12 / 00 are always a short scroll away
+  const COPIES = BASES.map((b, i) => { if (!LOOP[i]) return 1; let c = Math.max(7, Math.round(120 / b.length)); if (c % 2 === 0) c += 1; return c; });
+  const CENTER = BASES.map((b, i) => Math.floor(COPIES[i] / 2) * b.length); // item offset of the center copy (0 for flat cols)
+  const items = BASES.map((b, i) => { const out = []; for (let k = 0; k < COPIES[i]; k++) for (let j = 0; j < b.length; j++) out.push(b[j]); return out; });
+  const scrollPos = (ci, baseIdx) => (CENTER[ci] + baseIdx) * ROW;
 
   const decompose = (val) => {
     const v = T.snap15(T.clampMin(val));
@@ -582,9 +589,9 @@ function WheelTime({ label, value, onChange, lang }) {
     if (h24 > 23) { h24 = 23; m = 45; }
     const ai = h24 < 12 ? 0 : 1;
     let h12 = h24 % 12; if (h12 === 0) h12 = 12;
-    const hi = HOURS.indexOf(String(h12));
+    let hi = HOURS.indexOf(String(h12)); if (hi < 0) hi = 0;
     let mi = MINS.indexOf(T.pad2(m)); if (mi < 0) mi = 0;
-    return [hi < 0 ? 0 : hi, mi, ai];
+    return [hi, mi, ai];
   };
   const compose = (hi, mi, ai) => {
     const h12 = parseInt(HOURS[hi], 10);
@@ -598,11 +605,11 @@ function WheelTime({ label, value, onChange, lang }) {
   const programmatic = useRef(false);
   const cur = decompose(value);
 
-  // keep the columns positioned to match the current value
+  // position each column to match the current value (looping cols sit in the center copy)
   useEffect(() => {
     programmatic.current = true;
-    refs.forEach((r, i) => { if (r.current) r.current.scrollTop = cur[i] * ROW; });
-    const t = setTimeout(() => { programmatic.current = false; }, 70);
+    refs.forEach((r, i) => { if (r.current) r.current.scrollTop = scrollPos(i, cur[i]); });
+    const t = setTimeout(() => { programmatic.current = false; }, 80);
     return () => clearTimeout(t);
   }, [value, lang]);
 
@@ -611,9 +618,15 @@ function WheelTime({ label, value, onChange, lang }) {
     clearTimeout(timers.current[ci]);
     timers.current[ci] = setTimeout(() => {
       const el = refs[ci].current; if (!el) return;
-      let i = Math.round(el.scrollTop / ROW);
-      i = Math.max(0, Math.min(COLS[ci].length - 1, i));
-      const next = decompose(value); next[ci] = i;
+      const len = BASES[ci].length;
+      const raw = Math.round(el.scrollTop / ROW);
+      const baseIdx = LOOP[ci] ? ((raw % len) + len) % len : Math.max(0, Math.min(len - 1, raw));
+      if (LOOP[ci]) { // re-center to the middle copy so the loop buffer never runs out
+        programmatic.current = true;
+        el.scrollTop = scrollPos(ci, baseIdx);
+        setTimeout(() => { programmatic.current = false; }, 80);
+      }
+      const next = decompose(value); next[ci] = baseIdx;
       const nv = compose(next[0], next[1], next[2]);
       if (nv !== T.snap15(T.clampMin(value))) onChange(nv);
     }, 130);
@@ -623,9 +636,9 @@ function WheelTime({ label, value, onChange, lang }) {
     <div className="wtime-row">
       <span className="wtime-lbl">{label}</span>
       <div className="wtime-band">
-        {COLS.map((items, ci) => (
+        {items.map((list, ci) => (
           <div key={ci} className={'wtime-col' + (ci < 2 ? ' tnum' : '')} ref={refs[ci]} onScroll={onColScroll(ci)}>
-            {items.map((it, ii) => <div key={ii} className="wtime-item">{it}</div>)}
+            {list.map((it, ii) => <div key={ii} className="wtime-item">{it}</div>)}
           </div>
         ))}
       </div>
@@ -633,17 +646,40 @@ function WheelTime({ label, value, onChange, lang }) {
   );
 }
 
-function EntrySheet({ open, draft, activities, pastNames, S, lang, onClose, onSave, onDelete }) {
+function EntrySheet({ open, draft, activities, dayEntries, pastNames, S, lang, onClose, onSave, onDelete }) {
   const [name, setName] = useState('');
   const [start, setStart] = useState(540);
   const [end, setEnd] = useState(600);
   const [cat, setCat] = useState('A');
   const [actId, setActId] = useState(null);
 
+  // other entries this day (excluding the one being edited) — used to keep times from overlapping
+  const others = (dayEntries || []).filter((e) => !draft || e.id !== draft.id);
+  // clamp a desired [s,e) into the free gap so it never overlaps another entry (auto-trim to fit)
+  const fit = (s, e) => {
+    const T = window.TT;
+    s = T.clampMin(T.snap15(s)); e = T.clampMin(T.snap15(e)); if (e <= s) e = s + 15;
+    const sorted = others.slice().sort((a, b) => a.start - b.start);
+    let moved = true;
+    while (moved) { moved = false; for (const o of sorted) { if (s >= o.start && s < o.end) { s = o.end; moved = true; } } }
+    const limitAfter = (from) => { let lim = 1440; for (const o of sorted) { if (o.start >= from && o.start < lim) lim = o.start; } return lim; };
+    let limit = limitAfter(s);
+    if (limit - s < 15) { // no room at this spot → jump to the next gap that fits
+      const cands = sorted.map((o) => o.end).filter((x) => x > s).sort((a, b) => a - b);
+      for (const c of cands) {
+        const inside = sorted.some((o) => c >= o.start && c < o.end);
+        if (!inside && limitAfter(c) - c >= 15) { s = c; limit = limitAfter(c); break; }
+      }
+    }
+    e = Math.min(e, limit); if (e <= s) e = Math.min(limit, s + 15);
+    return { start: s, end: e };
+  };
+
   useEffect(() => {
     if (draft) {
       setName(draft.name || '');
-      setStart(draft.start); setEnd(draft.end);
+      const f = fit(draft.start, draft.end);
+      setStart(f.start); setEnd(f.end);
       setCat(draft.cat || 'A');
       setActId(draft.activityId || (activities[0] && activities[0].id) || null);
     }
@@ -674,9 +710,9 @@ function EntrySheet({ open, draft, activities, pastNames, S, lang, onClose, onSa
       </div>
 
       <div style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 13, padding: '2px 14px', marginBottom: 13 }}>
-        <WheelTime label={S.start} value={start} lang={lang} onChange={(v) => { setStart(v); setEnd(window.TT.clampMin(v + 60)); }} />
+        <WheelTime label={S.start} value={start} lang={lang} onChange={(v) => { const f = fit(v, v + 60); setStart(f.start); setEnd(f.end); }} />
         <div style={{ height: 1, background: 'var(--line-2)' }} />
-        <WheelTime label={S.end} value={end} lang={lang} onChange={setEnd} />
+        <WheelTime label={S.end} value={end} lang={lang} onChange={(v) => { const f = fit(start, v); setStart(f.start); setEnd(f.end); }} />
       </div>
 
       <div style={{ marginBottom: 13 }}>
@@ -870,7 +906,6 @@ function DayCalendar({ date, dayEntries, day, S, lang, onAddAt, onEdit }) {
 
 function Home({ entries, activities, date, setDate, day, actions, S, lang }) {
   const [sheet, setSheet] = useState(null);
-  const [sleepOpen, setSleepOpen] = useState(false);
 
   const dayEntries = window.TT.entriesForDate(entries, date);
   const st = window.TT.computeDay(dayEntries, day.wake, day.bed);
@@ -906,10 +941,6 @@ function Home({ entries, activities, date, setDate, day, actions, S, lang }) {
 
       {/* compact summary strip */}
       <div style={{ padding: '0 18px 10px', flexShrink: 0 }}>
-        <button onClick={() => setSleepOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto 9px', padding: '5px 12px', borderRadius: 999, background: 'var(--line-2)', color: 'var(--ink-2)', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
-          <span className="tnum">{window.TT.minTo12(day.wake, lang)} – {window.TT.minTo12(day.bed, lang)}</span>
-          <Icon name="pencil" size={12} />
-        </button>
         <StackedBar height={12} total={waking} segs={[
           { key: 'A', value: st.A, color: 'var(--a)' }, { key: 'B', value: st.B, color: 'var(--b)' },
           { key: 'C', value: st.C, color: 'var(--c)' }, { key: 'X', value: st.blank, color: 'var(--blank)' },
@@ -935,10 +966,8 @@ function Home({ entries, activities, date, setDate, day, actions, S, lang }) {
         <Icon name="plus" size={26} />
       </button>
 
-      <EntrySheet open={!!sheet} draft={sheet} activities={activities} pastNames={pastNames} S={S} lang={lang}
+      <EntrySheet open={!!sheet} draft={sheet} activities={activities} dayEntries={dayEntries} pastNames={pastNames} S={S} lang={lang}
         onClose={() => setSheet(null)} onSave={saveEntry} onDelete={(id) => { actions.deleteEntry(id); setSheet(null); }} />
-      <SleepSheet open={sleepOpen} wake={day.wake} bed={day.bed} S={S} lang={lang}
-        onClose={() => setSleepOpen(false)} onSave={(w, b) => { actions.setDay(date, { wake: w, bed: b }); setSleepOpen(false); }} />
     </React.Fragment>
   );
 }
