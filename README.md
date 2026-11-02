@@ -53,6 +53,7 @@ All persisted to `localStorage` as JSON, and mirrored to Firestore (`users/{uid}
 | `tt_days_v1` | `{ [dateStr]: { wake, bed } }` | per-day start/end overrides (minutes from midnight) |
 | `tt_settings_v2` | `{ wake, bed, lang }` | defaults + language (`'en'`/`'zh'`) |
 | `tt_vision_v1` | `{ vision, mission, values, strategies, goals }` | free text |
+| `tt_quicknames_v1` | `string[]` | quick-select presets for the entry name field (default `['meal','盥洗']`) |
 | `tt_sync_v1` | `{ updatedAt }` | local change timestamp for cloud last-write-wins |
 
 ```
@@ -100,7 +101,7 @@ Bottom tab bar, 4 tabs: **Today · Analysis · Vision · Settings**.
 - **Edit:** tap any entry block to open the sheet in edit mode (with Delete).
 
 ### 2) New / Edit Entry (bottom sheet)
-- **Name** text field (with datalist of previously used names).
+- **Name** text field (with datalist of previously used names), and a row of **quick-select chips** below it (default `meal` / `盥洗`) that fill the name on tap; managed in Settings → Quick notes.
 - **Start** and **End** in one compact card: each is an inline row (label left) with a **scroll-wheel
   time picker** — three columns: **hour (1–12) · minute (00/15/30/45) · AM/PM**. Each column scrolls
   on touch and snaps; no slider. The **hour and minute columns loop** (…45 → 00 →…, …11 → 12 → 1…) so
@@ -133,6 +134,7 @@ Five cards (Vision, Mission, Core Values, Strategies, Goals); one **Edit** butto
   (Synced / Syncing / Sync error) + Sign out.
 - **Language:** segmented English / 繁體中文.
 - **Activities:** list with color dot, rename, delete; "Add activity".
+- **Quick notes:** editable list of entry-name presets (add / rename / delete) shown as chips under the entry name field.
 - **Default day:** opens the start/end-of-day editor (writes the global default).
 - **Data:** entry count + "Reset all data" (confirm).
 
@@ -221,6 +223,10 @@ Preserve the data model and the A/B/C + day-window math exactly; they encode the
 ---
 
 ## Changelog
+
+### 2026-11-02
+- **Quick-select notes** — a row of tap-to-fill chips under the entry name field (default `meal` / `盥洗`), fully manageable (add / rename / delete) in Settings → Quick notes and synced via Firebase (`tt_quicknames_v1`).
+- Verified the start→end +1h rule crosses noon correctly (start 11:00 AM → end 12:00 PM); no change needed.
 
 ### 2026-06-07
 - **Removed the day start/end editor from Today** (the time pill); the day window is still set in Settings → Default day.
