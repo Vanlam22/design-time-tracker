@@ -211,6 +211,7 @@
   ].map((k, i) => ({ id: 'a' + (i + 1), nameKey: k[0], color: ACT_COLORS[i % ACT_COLORS.length] }));
 
   const DEFAULT_SETTINGS = { wake: 7 * 60, bed: 23 * 60, lang: 'en' };
+  const DEFAULT_QUICKNAMES = ['meal', '盥洗']; // quick-select presets for the entry name field
 
   /* ---------- translations ---------- */
   const STR = {
@@ -239,6 +240,9 @@
       activities: 'Activities', tagEvery: 'Tag every entry with one. Add, rename or remove anytime.',
       addActivity: 'Add activity', newActivity: 'New activity', renameActivity: 'Rename activity',
       activityName: 'Activity name', actPlaceholder: 'e.g. Work, Family, Exercise',
+      quickNotes: 'Quick notes', quickNotesDesc: 'Tap one under the name field to fill it in. Add, edit or remove anytime.',
+      addQuickNote: 'Add quick note', newQuickNote: 'New quick note', editQuickNote: 'Edit quick note',
+      quickNoteLabel: 'Quick note', quickNotePlaceholder: 'e.g. meal, 盥洗',
       defaultDay: 'Default day', wakeBed: 'Start & end of day',
       defaultDayDesc: 'Default day window for new days. You can still adjust any individual day.',
       language: 'Language', data: 'Data', stored: 'stored on this device',
@@ -284,6 +288,9 @@
       activities: '活動', tagEvery: '每筆記錄選擇一個活動，可隨時新增、改名或刪除。',
       addActivity: '新增活動', newActivity: '新增活動', renameActivity: '重新命名活動',
       activityName: '活動名稱', actPlaceholder: '例如：工作、家庭、運動',
+      quickNotes: '快速備註', quickNotesDesc: '在名稱欄位下方點一下即可填入，可隨時新增、編輯或刪除。',
+      addQuickNote: '新增快速備註', newQuickNote: '新增快速備註', editQuickNote: '編輯快速備註',
+      quickNoteLabel: '快速備註', quickNotePlaceholder: '例如：meal、盥洗',
       defaultDay: '預設一天', wakeBed: '一天起訖時間',
       defaultDayDesc: '新一天的預設起訖時間，仍可調整個別日期。',
       language: '語言', data: '資料', stored: '筆記錄儲存在此裝置',
@@ -392,7 +399,7 @@
   function daysInMonth(s) { const d = parseDate(s); return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); }
 
   /* ---------- persistence ---------- */
-  const KEYS = { entries: 'tt_entries_v1', activities: 'tt_activities_v2', days: 'tt_days_v1', settings: 'tt_settings_v2', vision: 'tt_vision_v1' };
+  const KEYS = { entries: 'tt_entries_v1', activities: 'tt_activities_v2', days: 'tt_days_v1', settings: 'tt_settings_v2', vision: 'tt_vision_v1', quicknames: 'tt_quicknames_v1' };
   function load(key, fallback) { try { const raw = localStorage.getItem(KEYS[key]); return raw ? JSON.parse(raw) : fallback; } catch (e) { return fallback; } }
   function save(key, val) { try { localStorage.setItem(KEYS[key], JSON.stringify(val)); } catch (e) {} }
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -441,7 +448,7 @@
   }
 
   window.TT = {
-    CAT_ORDER, SLEEP, BLANK, ACT_COLORS, DEFAULT_ACTIVITIES, DEFAULT_SETTINGS,
+    CAT_ORDER, SLEEP, BLANK, ACT_COLORS, DEFAULT_ACTIVITIES, DEFAULT_SETTINGS, DEFAULT_QUICKNAMES,
     strings, actName, catLabel,
     pad2, minTo12, hourLabel, fmtDur, timeRange, snap15, clampMin,
     toDateStr, parseDate, todayStr, addDays, isToday, dateTitle, dateSub, weekLabel, monthLabel,
@@ -646,7 +653,7 @@ function WheelTime({ label, value, onChange, lang }) {
   );
 }
 
-function EntrySheet({ open, draft, activities, dayEntries, pastNames, S, lang, onClose, onSave, onDelete }) {
+function EntrySheet({ open, draft, activities, quicknames, dayEntries, pastNames, S, lang, onClose, onSave, onDelete }) {
   const [name, setName] = useState('');
   const [start, setStart] = useState(540);
   const [end, setEnd] = useState(600);
@@ -707,6 +714,18 @@ function EntrySheet({ open, draft, activities, dayEntries, pastNames, S, lang, o
         <div className="field-label">{S.whatDoing}</div>
         <input className="text-input" value={name} list="tt-names" placeholder={S.namePlaceholder} onChange={(e) => setName(e.target.value)} />
         <datalist id="tt-names">{pastNames.map((n) => <option key={n} value={n} />)}</datalist>
+        {quicknames && quicknames.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 9 }}>
+            {quicknames.map((q, i) => {
+              const on = name.trim() === q;
+              return (
+                <button key={i} onClick={() => setName(q)} style={{ padding: '7px 13px', borderRadius: 999, fontSize: 13.5, fontWeight: 600,
+                  border: '1.5px solid ' + (on ? 'var(--ink)' : 'var(--line)'), background: on ? 'var(--ink)' : 'var(--card)',
+                  color: on ? 'var(--bg)' : 'var(--ink-2)', transition: 'all .14s' }}>{q}</button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div style={{ background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 13, padding: '2px 14px', marginBottom: 13 }}>
@@ -904,7 +923,7 @@ function DayCalendar({ date, dayEntries, day, S, lang, onAddAt, onEdit }) {
   );
 }
 
-function Home({ entries, activities, date, setDate, day, actions, S, lang }) {
+function Home({ entries, activities, quicknames, date, setDate, day, actions, S, lang }) {
   const [sheet, setSheet] = useState(null);
 
   const dayEntries = window.TT.entriesForDate(entries, date);
@@ -966,7 +985,7 @@ function Home({ entries, activities, date, setDate, day, actions, S, lang }) {
         <Icon name="plus" size={26} />
       </button>
 
-      <EntrySheet open={!!sheet} draft={sheet} activities={activities} dayEntries={dayEntries} pastNames={pastNames} S={S} lang={lang}
+      <EntrySheet open={!!sheet} draft={sheet} activities={activities} quicknames={quicknames} dayEntries={dayEntries} pastNames={pastNames} S={S} lang={lang}
         onClose={() => setSheet(null)} onSave={saveEntry} onDelete={(id) => { actions.deleteEntry(id); setSheet(null); }} />
     </React.Fragment>
   );
@@ -1205,23 +1224,26 @@ Object.assign(window, { Analysis });
 
 <script type="text/babel" data-presets="react">
 /* ============================ Settings ============================ */
-function ActivitySheet({ editing, S, onClose, onSave }) {
+function ActivitySheet({ editing, S, labels, onClose, onSave }) {
   const [name, setName] = useState('');
   useEffect(() => { if (editing) setName(editing.name || ''); }, [editing]);
   const valid = name.trim().length > 0;
+  const L = labels || { newT: S.newActivity, editT: S.renameActivity, field: S.activityName, ph: S.actPlaceholder };
+  const isEdit = editing && (editing.id != null || editing.i != null);
   return (
-    <Sheet open={!!editing} onClose={onClose} title={editing && editing.id ? S.renameActivity : S.newActivity}
+    <Sheet open={!!editing} onClose={onClose} title={isEdit ? L.editT : L.newT}
       footer={<button className="btn btn-primary btn-block" disabled={!valid} style={{ opacity: valid ? 1 : 0.4 }} onClick={() => valid && onSave(name.trim())}>{S.save}</button>}>
-      <div className="field-label">{S.activityName}</div>
-      <input className="text-input" value={name} autoFocus placeholder={S.actPlaceholder}
+      <div className="field-label">{L.field}</div>
+      <input className="text-input" value={name} autoFocus placeholder={L.ph}
         onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && valid) onSave(name.trim()); }} />
       <div style={{ height: 4 }} />
     </Sheet>
   );
 }
 
-function Settings({ activities, settings, actions, entryCount, sync, S, lang }) {
+function Settings({ activities, quicknames, settings, actions, entryCount, sync, S, lang }) {
   const [editing, setEditing] = useState(null);
+  const [editingQn, setEditingQn] = useState(null);
   const [boundsOpen, setBoundsOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
@@ -1306,6 +1328,24 @@ function Settings({ activities, settings, actions, entryCount, sync, S, lang }) 
           </div>
           <button className="btn btn-ghost btn-block" style={{ marginTop: 11, padding: 13 }} onClick={() => setEditing({ name: '' })}><Icon name="plus" size={18} />{S.addActivity}</button>
 
+          {/* Quick notes */}
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', margin: '24px 2px 8px' }}>
+            <span style={{ fontSize: 13.5, fontWeight: 700 }}>{S.quickNotes}</span>
+            <span style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>{quicknames.length}</span>
+          </div>
+          <p style={{ margin: '0 2px 12px', fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.5 }}>{S.quickNotesDesc}</p>
+          <div className="card" style={{ overflow: 'hidden' }}>
+            {quicknames.map((q, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderTop: i ? '1px solid var(--line)' : 'none' }}>
+                <span style={{ flex: 1, fontSize: 15, fontWeight: 500 }}>{q}</span>
+                <button onClick={() => setEditingQn({ i, name: q })} aria-label="rename" style={{ width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center', color: 'var(--ink-2)', background: 'var(--line-2)' }}><Icon name="pencil" size={15} /></button>
+                <button onClick={() => actions.deleteQuickname(i)} aria-label="delete" style={{ width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center', color: 'var(--c)', background: 'var(--c-t)' }}><Icon name="trash" size={15} /></button>
+              </div>
+            ))}
+            {quicknames.length === 0 && <div style={{ padding: 18, textAlign: 'center', color: 'var(--ink-3)', fontSize: 14 }}>—</div>}
+          </div>
+          <button className="btn btn-ghost btn-block" style={{ marginTop: 11, padding: 13 }} onClick={() => setEditingQn({ name: '' })}><Icon name="plus" size={18} />{S.addQuickNote}</button>
+
           {/* Default day */}
           <div style={{ fontSize: 13.5, fontWeight: 700, margin: '24px 2px 9px' }}>{S.defaultDay}</div>
           <button onClick={() => setBoundsOpen(true)} className="card" style={{ width: '100%', padding: '14px 15px', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1332,6 +1372,8 @@ function Settings({ activities, settings, actions, entryCount, sync, S, lang }) 
 
       <ActivitySheet editing={editing} S={S} onClose={() => setEditing(null)}
         onSave={(name) => { if (editing.id) actions.renameActivity(editing.id, name); else actions.addActivity(name); setEditing(null); }} />
+      <ActivitySheet editing={editingQn} S={S} labels={{ newT: S.newQuickNote, editT: S.editQuickNote, field: S.quickNoteLabel, ph: S.quickNotePlaceholder }} onClose={() => setEditingQn(null)}
+        onSave={(name) => { if (editingQn.i != null) actions.renameQuickname(editingQn.i, name); else actions.addQuickname(name); setEditingQn(null); }} />
       <SleepSheet open={boundsOpen} wake={settings.wake} bed={settings.bed} S={S} lang={lang}
         onClose={() => setBoundsOpen(false)} onSave={(w, b) => { actions.setSettings({ wake: w, bed: b }); setBoundsOpen(false); }} />
     </React.Fragment>
@@ -1449,6 +1491,7 @@ function useFirebaseSync(data, applyRemote) {
       values: (d.vision && d.vision.values) || '', strategies: (d.vision && d.vision.strategies) || '',
       goals: (d.vision && d.vision.goals) || '',
     },
+    quicknames: d.quicknames || [],
   });
   // stable stringify: sort object keys (arrays keep order) so equal content == equal string
   const stable = (o) => {
@@ -1489,7 +1532,7 @@ function useFirebaseSync(data, applyRemote) {
         seeded = true;
         const remote = snap.data();
         const rUpd = remote.updatedAt || 0;
-        const remotePacked = pack({ entries: remote.entries, activities: remote.activities, days: remote.days, settings: remote.settings || {}, vision: remote.vision || {} });
+        const remotePacked = pack({ entries: remote.entries, activities: remote.activities, days: remote.days, settings: remote.settings || {}, vision: remote.vision || {}, quicknames: remote.quicknames });
         const remoteStr = stable(remotePacked);
         if (remoteStr === lastPayload.current) { setStatus('synced'); return; }
         if (rUpd >= localUpd.current) {           // remote wins → pull
@@ -1585,12 +1628,14 @@ function App() {
   const [days, setDays] = useState(() => T.load('days', {}));
   const [settings, setSettings] = useState(() => ({ ...T.DEFAULT_SETTINGS, ...T.load('settings', {}) }));
   const [vision, setVision] = useState(() => ({ vision: '', mission: '', values: '', strategies: '', goals: '', ...T.load('vision', {}) }));
+  const [quicknames, setQuicknames] = useState(() => T.load('quicknames', T.DEFAULT_QUICKNAMES));
 
   useEffect(() => { T.save('entries', entries); }, [entries]);
   useEffect(() => { T.save('activities', activities); }, [activities]);
   useEffect(() => { T.save('days', days); }, [days]);
   useEffect(() => { T.save('settings', settings); }, [settings]);
   useEffect(() => { T.save('vision', vision); }, [vision]);
+  useEffect(() => { T.save('quicknames', quicknames); }, [quicknames]);
 
   const lang = settings.lang || 'en';
   window.__lang = lang;
@@ -1598,13 +1643,14 @@ function App() {
   useEffect(() => { document.body.className = lang === 'zh' ? 'lang-zh' : ''; document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : 'en'; }, [lang]);
 
   // cloud sync (no-op until firebase-config.js is filled in)
-  const data = { entries, activities, days, settings, vision };
+  const data = { entries, activities, days, settings, vision, quicknames };
   const applyRemote = useCallback((d) => {
     if (d.entries) setEntries(d.entries);
     if (d.activities) setActivities(d.activities);
     if (d.days) setDays(d.days);
     if (d.settings) setSettings((s) => ({ ...T.DEFAULT_SETTINGS, ...s, ...d.settings }));
     if (d.vision) setVision((v) => ({ ...v, ...d.vision }));
+    if (d.quicknames) setQuicknames(d.quicknames);
   }, []);
   const sync = window.useFirebaseSync(data, applyRemote);
 
@@ -1620,7 +1666,10 @@ function App() {
     addActivity: (name) => setActivities((as) => [...as, { id: T.uid(), name, color: T.ACT_COLORS[as.length % T.ACT_COLORS.length] }]),
     renameActivity: (id, name) => setActivities((as) => as.map((a) => a.id === id ? { ...a, name, nameKey: undefined } : a)),
     deleteActivity: (id) => setActivities((as) => as.filter((a) => a.id !== id)),
-    clearAll: () => { setEntries([]); setActivities(T.DEFAULT_ACTIVITIES); setDays({}); setVision({ vision: '', mission: '', values: '', strategies: '', goals: '' }); setSettings((s) => ({ ...T.DEFAULT_SETTINGS, lang: s.lang })); },
+    addQuickname: (name) => setQuicknames((qs) => qs.includes(name) ? qs : [...qs, name]),
+    renameQuickname: (i, name) => setQuicknames((qs) => qs.map((q, j) => j === i ? name : q)),
+    deleteQuickname: (i) => setQuicknames((qs) => qs.filter((q, j) => j !== i)),
+    clearAll: () => { setEntries([]); setActivities(T.DEFAULT_ACTIVITIES); setDays({}); setVision({ vision: '', mission: '', values: '', strategies: '', goals: '' }); setQuicknames(T.DEFAULT_QUICKNAMES); setSettings((s) => ({ ...T.DEFAULT_SETTINGS, lang: s.lang })); },
   };
 
   const tabs = [
@@ -1632,10 +1681,10 @@ function App() {
 
   return (
     <div className="app">
-      {tab === 'home' && <Home entries={entries} activities={activities} date={date} setDate={setDate} day={getDay(date)} actions={actions} S={S} lang={lang} />}
+      {tab === 'home' && <Home entries={entries} activities={activities} quicknames={quicknames} date={date} setDate={setDate} day={getDay(date)} actions={actions} S={S} lang={lang} />}
       {tab === 'analysis' && <Analysis entries={entries} activities={activities} getDay={getDay} S={S} lang={lang} />}
       {tab === 'vision' && <Vision vision={vision} actions={actions} S={S} />}
-      {tab === 'settings' && <Settings activities={activities} settings={settings} actions={actions} entryCount={entries.length} sync={sync} S={S} lang={lang} />}
+      {tab === 'settings' && <Settings activities={activities} quicknames={quicknames} settings={settings} actions={actions} entryCount={entries.length} sync={sync} S={S} lang={lang} />}
       <nav className="tabbar">
         {tabs.map((t) => (
           <button key={t.key} className={'tab' + (tab === t.key ? ' active' : '')} onClick={() => setTab(t.key)}>
